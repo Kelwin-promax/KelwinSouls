@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kelwin Souls</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --gold:#d9c28a; --red:#8b1a1a; --green:#4f7a35; --ink:#0b0b0e; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--ink); font-family:'Cinzel',Georgia,serif; color:var(--gold); user-select:none; }
+  #c { width:100%; height:100%; display:block; outline:none; }
+  #hud { position:fixed; inset:0; pointer-events:none; }
+  #bars { position:absolute; left:24px; top:20px; }
+  .bar { height:14px; margin-bottom:6px; background:rgba(0,0,0,.65); border:1px solid #3a342a; }
+  .bar > i { display:block; height:100%; width:100%; transition:width .12s linear; }
+  #hp > i { background:linear-gradient(#b32525,#6e1212); }
+  #st > i { background:linear-gradient(#6ea048,#3d5f28); }
+  #estus { font-size:14px; margin-top:4px; letter-spacing:1px; }
+  #souls { position:absolute; right:28px; bottom:22px; font-size:26px; text-shadow:0 0 8px #000; }
+  #souls small { display:block; font-size:12px; text-align:right; opacity:.7; letter-spacing:2px; }
+  #prompt { position:absolute; left:50%; bottom:18%; transform:translateX(-50%); font-size:18px; text-align:center; text-shadow:0 0 6px #000; line-height:1.6; }
+  #msg { position:absolute; left:0; right:0; top:42%; text-align:center; font-size:46px; letter-spacing:8px; opacity:0; transition:opacity .8s; text-shadow:0 0 18px #000; }
+  #msg.show { opacity:1; }
+  #msg.gold { color:#e8d28a; } #msg.red { color:#a01818; }
+  #boss { position:absolute; left:50%; bottom:7%; width:min(720px,70vw); transform:translateX(-50%); display:none; }
+  #boss .name { font-size:18px; margin-bottom:4px; letter-spacing:2px; }
+  #boss .bar { height:12px; } #boss .bar > i { background:linear-gradient(#a82a2a,#5c1010); }
+  #lock { position:absolute; width:14px; height:14px; margin:-7px 0 0 -7px; border:2px solid #e8d28a; border-radius:50%; display:none; box-shadow:0 0 8px #000; }
+  #death { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:clamp(28px,7vw,72px); letter-spacing:.18em; color:#9b1515; text-align:center;
+           background:radial-gradient(ellipse at center,rgba(0,0,0,.55),rgba(0,0,0,.92)); opacity:0; transition:opacity 1.2s; }
+  #death.show { opacity:1; }
+  #start { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+           background:rgba(5,5,8,.92); cursor:pointer; text-align:center; z-index:5; }
+  #start h1 { font-size:64px; letter-spacing:12px; margin:0; font-weight:700; }
+  #start p { margin:0; font-size:15px; line-height:1.9; letter-spacing:1px; max-width:640px; opacity:.85; }
+  #start .go { margin-top:10px; font-size:20px; letter-spacing:6px; animation:pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity:.3; } }
+  .lb { position:fixed; left:0; right:0; height:0; background:#000; z-index:3; transition:height .9s ease; }
+  #lbT { top:0; } #lbB { bottom:0; }
+  body.cinematic .lb { height:12%; }
+  #hud > * { transition:opacity .6s; }
+  body.cinematic #hud > *:not(#title):not(#skip) { opacity:0 !important; }
+  #title { position:absolute; left:0; right:0; bottom:20%; text-align:center; opacity:0; transition:opacity 1.4s; z-index:4; }
+  #title.show { opacity:1; }
+  #title h2 { margin:0; font-size:clamp(28px,6vw,64px); letter-spacing:.16em; color:#e8d28a; font-weight:700; text-shadow:0 0 24px #000; }
+  #title p { margin:8px 0 0; font-size:clamp(14px,2vw,22px); letter-spacing:.3em; color:#b9a77a; }
+  #skip { position:absolute; right:24px; bottom:14px; font-size:13px; letter-spacing:2px; opacity:0; z-index:4; }
+  body.cinematic #skip { opacity:.7 !important; }
+  kbd { border:1px solid #6b5f45; padding:0 6px; border-radius:3px; }
+</style>
+</head>
+<body>
+<canvas id="c" touch-action="none"></canvas>
+
+<div id="hud">
+  <div id="bars">
+    <div class="bar" id="hp"><i></i></div>
+    <div class="bar" id="st"><i></i></div>
+    <div id="estus"></div>
+  </div>
+  <div id="souls"><small>ALMAS</small><span id="soulsN">0</span></div>
+  <div id="prompt"></div>
+  <div id="msg"></div>
+  <div id="boss"><div class="name"></div><div class="bar"><i></i></div></div>
+  <div id="lock"></div>
+  <div id="title"><h2></h2><p></p></div>
+  <div id="skip">[ESPAÇO] PULAR</div>
+  <div id="death">VOCÊ MORREU</div>
+</div>
+
+<div class="lb" id="lbT"></div><div class="lb" id="lbB"></div>
+
+<div id="start">
+  <h1>KELWIN SOULS</h1>
+  <p>
+    <kbd>W A S D</kbd> mover &nbsp; <kbd>Mouse</kbd> câmera &nbsp; <kbd>Shift</kbd> correr &nbsp; <kbd>Espaço</kbd> rolar<br>
+    <kbd>Botão esq.</kbd> ataque leve &nbsp; <kbd>Botão dir.</kbd> ataque pesado &nbsp; <kbd>F</kbd> defender<br>
+    <kbd>Q</kbd> fixar alvo &nbsp; <kbd>R</kbd> Estus &nbsp; <kbd>E</kbd> interagir (fogueira / névoa) &nbsp; <kbd>L</kbd> subir de nível (na fogueira)<br>
+    <kbd>← →</kbd> girar câmera sem mouse lock &nbsp; <kbd>Esc</kbd> soltar o mouse
+  </p>
+  <div class="go" id="goText">CARREGANDO...</div>
+</div>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
