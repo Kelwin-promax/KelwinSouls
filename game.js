@@ -8,8 +8,12 @@ const CONFIG = {
   player: {
     maxHp: 100, maxStamina: 100, estusMax: 3, estusHeal: 55,
     walk: 4.2, sprint: 7.2, roll: 8.5,
-    light:  { windup: 0.18, active: 0.12, recover: 0.30, stamina: 14, dmg: 22, range: 2.9 },
-    heavy:  { windup: 0.50, active: 0.15, recover: 0.55, stamina: 30, dmg: 50, range: 3.3 },
+    // ataque leve encadeia: vertical -> horizontal -> diagonal (arc = meia abertura do golpe, em radianos)
+    light:  { windup: 0.18, active: 0.12, recover: 0.30, stamina: 14, dmg: 22, range: 2.9, arc: 1.0, clip: 'vertical' },
+    sweep:  { windup: 0.20, active: 0.14, recover: 0.32, stamina: 16, dmg: 20, range: 3.0, arc: 1.7, clip: 'sweep' },
+    diag:   { windup: 0.22, active: 0.13, recover: 0.36, stamina: 18, dmg: 27, range: 3.0, arc: 1.25, clip: 'diag' },
+    heavy:  { windup: 0.50, active: 0.15, recover: 0.55, stamina: 30, dmg: 50, range: 3.3, arc: 1.0, clip: 'vertical' },
+    combo: ['light', 'sweep', 'diag'],
   },
   levelUp: { baseCost: 100, costPerLevel: 60, hpPerLevel: 10, dmgPerLevel: 0.08 },
   enemies: {
@@ -29,10 +33,12 @@ const CONFIG = {
     boss: {
       name: 'Guardião das Cinzas', subtitle: 'Sentinela do Trono Esquecido', hp: 900, speed: 3.6, souls: 2500, scale: 2.5, boss: true, stopDist: 4.2,
       look: { tint: [1.0, 0.45, 0.4], skin: [0.35, 0.3, 0.28], armor: [0.2, 0.08, 0.08], eye: [1, 0.15, 0.1], weapon: 1.6, horns: true },
+      // anim = clipe do boss.glb; hit = [fim da preparação, fim do golpe] em fração do clipe
       attacks: [
-        { kind: 'melee', windup: 0.8, active: 0.2, recover: 1.0, range: 5.0, arc: 120, dmg: 38, maxD: 5.5 },
-        { kind: 'aoe',   windup: 1.2, active: 0.2, recover: 1.3, radius: 6.0, reach: 4.0, dmg: 55, maxD: 5.5 },
-        { kind: 'leap',  windup: 0.9, active: 0.5, recover: 1.1, radius: 4.5, dmg: 50, minD: 9, maxD: 26 },
+        { kind: 'melee', windup: 0.6, active: 0.2, recover: 1.0, range: 5.0, arc: 70,  dmg: 38, maxD: 5.5, anim: 'Attack_Base_03', hit: [0.25, 0.38] },
+        { kind: 'melee', windup: 0.6, active: 0.2, recover: 1.0, range: 5.0, arc: 140, dmg: 34, maxD: 5.5, anim: 'Attack_Base_01', hit: [0.28, 0.42] },
+        { kind: 'aoe',   windup: 1.0, active: 0.2, recover: 1.3, radius: 6.0, reach: 4.0, dmg: 55, maxD: 5.5, anim: 'Attack_Base_02', hit: [0.25, 0.35] },
+        { kind: 'leap',  windup: 1.0, active: 0.5, recover: 1.1, radius: 4.5, dmg: 50, minD: 9, maxD: 26, anim: 'Attack_Base_09', hit: [0.3, 0.47] },
       ],
     },
   },
@@ -148,7 +154,11 @@ function sfx(k) {
 }
 
 /* ------------------------------ mundo ------------------------------ */
-const ARENA = { x: 0, z: 61, r: 23 };
+// arena do chefe = salão do castelo (assets/castle_hall.glb, gerado por tools/blender/castle_hall.py)
+// ARENA.z - ARENA.r é a entrada em arco do salão; a nave vai de x -9.3 a 9.9 e de z 37.5 a 78.5
+const ARENA = { x: 0, z: 57.5, r: 20 };
+const HALL = { x0: -9.3, x1: 9.9, z1: 78.3 };
+let hallGrid = null, hallWalls = [];
 const obstacles = [];
 
 // chão com textura procedural de pedra
@@ -163,8 +173,8 @@ const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 240, height: 
   tex.update(); tex.uScale = tex.vScale = 30; gm.diffuseTexture = tex; gm.specularColor = new C3(0.02, 0.02, 0.02);
   gm.maxSimultaneousLights = 8; ground.material = gm; ground.receiveShadows = true;
 }
-const arenaFloor = BABYLON.MeshBuilder.CreateDisc('arena', { radius: ARENA.r, tessellation: 64 }, scene);
-arenaFloor.rotation.x = Math.PI / 2; arenaFloor.position.set(ARENA.x, 0.02, ARENA.z);
+const arenaFloor = BABYLON.MeshBuilder.CreateDisc('arena', { radius: 8.5, tessellation: 64 }, scene);   // círculo de runas no chão do salão
+arenaFloor.rotation.x = Math.PI / 2; arenaFloor.position.set(0.3, 0.07, ARENA.z);
 const runeTex = (() => {
   const t = new BABYLON.DynamicTexture('runes', 1024, scene, true), c = t.getContext(), R = 512;
   c.fillStyle = '#000'; c.fillRect(0, 0, 1024, 1024); c.translate(R, R);
@@ -187,8 +197,9 @@ const runeTex = (() => {
   t.update(); return t;
 })();
 {
-  const m = mat([0.13, 0.12, 0.12]); m.emissiveTexture = runeTex; runeTex.level = 0.25; m.backFaceCulling = false;
-  arenaFloor.material = m; arenaFloor.receiveShadows = true;
+  const m = mat([0, 0, 0]); m.emissiveTexture = runeTex; runeTex.level = 0.25; m.backFaceCulling = false;
+  m.opacityTexture = runeTex; m.zOffset = -2;            // só as linhas das runas aparecem sobre o piso
+  arenaFloor.material = m;
 }
 
 // pilares / ruínas
@@ -214,17 +225,10 @@ for (let i = 0; i < 46; i++) {
 }
 // muralha com a névoa no meio
 for (let x = -60; x <= 60; x += 2.6) { if (Math.abs(x) < 6) continue; addPillar(x, 36, 1.35, 8 + rnd() * 2); }
-// anel de pilares da arena
-for (let a = 0; a < 360; a += 24) {
-  const rad = a * Math.PI / 180, dx = Math.sin(rad), dz = -Math.cos(rad);
-  if (dz < -0.8) continue;
-  const px = ARENA.x + dx * (ARENA.r + 1.5), pz = ARENA.z + dz * (ARENA.r + 1.5);
-  addPillar(px, pz, 1.2, 10 + rnd() * 3);
-}
-
 // ---- decoracao da arena do chefe ----
-const arenaLight = new BABYLON.PointLight('arenaL', new V3(ARENA.x, 7, ARENA.z), scene);
+const arenaLight = new BABYLON.PointLight('arenaL', new V3(0.3, 6, ARENA.z), scene);
 arenaLight.diffuse = new C3(1, 0.3, 0.15); arenaLight.range = 45; arenaLight.intensity = 0.3;
+const brazierLights = [];
 const braziers = [];
 {
   const stone = mat([0.2, 0.2, 0.22]), cloth = mat([0.35, 0.05, 0.06], [0.08, 0.0, 0.0]); cloth.backFaceCulling = false;
@@ -232,28 +236,29 @@ const braziers = [];
   bc.fillStyle = '#4a0a0d'; bc.fillRect(0, 0, 64, 256); bc.fillStyle = '#b8964a'; bc.fillRect(4, 0, 3, 256); bc.fillRect(57, 0, 3, 256);
   bc.strokeStyle = '#b8964a'; bc.lineWidth = 3; bc.beginPath(); bc.arc(32, 90, 14, 0, 7); bc.moveTo(32, 60); bc.lineTo(32, 150); bc.moveTo(14, 110); bc.lineTo(50, 110); bc.stroke();
   clothTex.update(); cloth.diffuseTexture = clothTex; cloth.emissiveColor = new C3(0.12, 0.02, 0.02);
-  for (let a = 0; a < 360; a += 24) {
-    const rad = a * Math.PI / 180, dx = Math.sin(rad), dz = -Math.cos(rad);
-    if (dz < -0.8) continue;
-    if (a % 48 === 0) { // estandarte voltado para o centro
-      const b = BABYLON.MeshBuilder.CreatePlane('banner', { width: 2.6, height: 8 }, scene);
-      const r = ARENA.r + 0.3; b.position.set(ARENA.x + dx * r, 6.5, ARENA.z + dz * r); b.rotation.y = Math.atan2(dx, dz); b.material = cloth;
-    } else if (dz > -0.5) { // braseiro entre os pilares
-      const r = ARENA.r - 2.5, x = ARENA.x + dx * r, z = ARENA.z + dz * r;
-      const base = BABYLON.MeshBuilder.CreateCylinder('brb', { diameterTop: 0.5, diameterBottom: 0.9, height: 1.3 }, scene); base.position.set(x, 0.65, z); base.material = stone;
-      const bowl = BABYLON.MeshBuilder.CreateCylinder('brw', { diameterTop: 1.3, diameterBottom: 0.6, height: 0.4 }, scene); bowl.position.set(x, 1.5, z); bowl.material = stone;
-      sg.addShadowCaster(base);
-      obstacles.push({ x, z, r: 0.5 });
-      const ps = new BABYLON.ParticleSystem('brazier', 150, scene);
-      ps.particleTexture = flareTex; ps.emitter = new V3(x, 1.7, z); ps.minEmitBox = new V3(-0.25, 0, -0.25); ps.maxEmitBox = new V3(0.25, 0, 0.25);
-      ps.color1 = new BABYLON.Color4(1, 0.55, 0.15, 1); ps.color2 = new BABYLON.Color4(1, 0.25, 0.05, 1); ps.colorDead = new BABYLON.Color4(0.3, 0, 0, 0);
-      ps.minSize = 0.3; ps.maxSize = 0.8; ps.minLifeTime = 0.4; ps.maxLifeTime = 1.2; ps.emitRate = 0;
-      ps.direction1 = new V3(-0.2, 1, -0.2); ps.direction2 = new V3(0.2, 2, 0.2); ps.gravity = new V3(0, 2, 0); ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD; ps.start();
-      braziers.push(ps);
-    }
+  // estandartes nas paredes laterais, voltados para o centro
+  for (const [x, z] of [[HALL.x0 + 0.08, 54], [HALL.x0 + 0.08, 62], [HALL.x1 - 0.08, 54], [HALL.x1 - 0.08, 62], [HALL.x0 + 0.08, 41], [HALL.x1 - 0.08, 41]]) {
+    const b = BABYLON.MeshBuilder.CreatePlane('banner', { width: 2.2, height: 5.2 }, scene);
+    b.position.set(x, 4.2, z); b.rotation.y = Math.PI / 2; b.material = cloth;
+  }
+  // braseiros ao longo da nave (fora das passagens para as celas em z 48 e 68)
+  for (const [x, z] of [[-7.4, 43], [8, 43], [-7.4, 57.5], [8, 57.5], [-7.4, 73], [8, 73]]) {
+    const base = BABYLON.MeshBuilder.CreateCylinder('brb', { diameterTop: 0.5, diameterBottom: 0.9, height: 1.3 }, scene); base.position.set(x, 0.65, z); base.material = stone;
+    const bowl = BABYLON.MeshBuilder.CreateCylinder('brw', { diameterTop: 1.3, diameterBottom: 0.6, height: 0.4 }, scene); bowl.position.set(x, 1.5, z); bowl.material = stone;
+    sg.addShadowCaster(base);
+    obstacles.push({ x, z, r: 0.5 });
+    const ps = new BABYLON.ParticleSystem('brazier', 150, scene);
+    ps.particleTexture = flareTex; ps.emitter = new V3(x, 1.7, z); ps.minEmitBox = new V3(-0.25, 0, -0.25); ps.maxEmitBox = new V3(0.25, 0, 0.25);
+    ps.color1 = new BABYLON.Color4(1, 0.55, 0.15, 1); ps.color2 = new BABYLON.Color4(1, 0.25, 0.05, 1); ps.colorDead = new BABYLON.Color4(0.3, 0, 0, 0);
+    ps.minSize = 0.3; ps.maxSize = 0.8; ps.minLifeTime = 0.4; ps.maxLifeTime = 1.2; ps.emitRate = 0;
+    ps.direction1 = new V3(-0.2, 1, -0.2); ps.direction2 = new V3(0.2, 2, 0.2); ps.gravity = new V3(0, 2, 0); ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD; ps.start();
+    braziers.push(ps);
+  }
+  for (const z of [43, 73]) { // luz quente dos braseiros iluminando paredes e chão
+    const l = new BABYLON.PointLight('brL', new V3(0.3, 3.5, z), scene); l.diffuse = new C3(1, 0.5, 0.2); l.range = 22; l.intensity = 0; brazierLights.push(l);
   }
   // trono ao fundo
-  const dark = mat([0.12, 0.11, 0.13], [0.03, 0.0, 0.0]), tz = ARENA.z + ARENA.r - 3.5;
+  const dark = mat([0.12, 0.11, 0.13], [0.03, 0.0, 0.0]), tz = HALL.z1 - 3.3;
   const tb = (w, h, d, x, y, z) => { const b = BABYLON.MeshBuilder.CreateBox('throne', { width: w, height: h, depth: d }, scene); b.position.set(x, y, z); b.material = dark; sg.addShadowCaster(b); return b; };
   tb(9, 0.5, 6, 0, 0.25, tz); tb(7, 0.5, 4.6, 0, 0.75, tz + 0.2);               // degraus
   tb(3.6, 1.0, 2.6, 0, 1.5, tz + 0.6); tb(4.2, 8, 1.0, 0, 5.0, tz + 1.9);        // assento e encosto
@@ -265,6 +270,7 @@ const braziers = [];
 let arenaMood = 'idle';
 function setArenaMood(m) {
   arenaMood = m;
+  brazierLights.forEach(l => l.intensity = m === 'fight' ? 1.4 : m === 'idle' ? 0.6 : 0.15);
   braziers.forEach(ps => {
     ps.emitRate = m === 'fight' ? 120 : m === 'idle' ? 28 : 0;
     ps.color1 = m === 'fight' ? new BABYLON.Color4(1, 0.25, 0.05, 1) : new BABYLON.Color4(1, 0.55, 0.15, 1);
@@ -277,10 +283,30 @@ function resolveWorld(p, r) {
     const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), min = o.r + r;
     if (d < min && d > 1e-4) { p.x = o.x + dx / d * min; p.z = o.z + dz / d * min; }
   }
-  if (p.z > ARENA.z - ARENA.r) {
-    const dx = p.x - ARENA.x, dz = p.z - ARENA.z, d = Math.hypot(dx, dz), max = ARENA.r - r;
-    if (d > max) { p.x = ARENA.x + dx / d * max; p.z = ARENA.z + dz / d * max; }
-  } else { p.x = clamp(p.x, -70, 70); p.z = clamp(p.z, -60, ARENA.z - ARENA.r); }
+  const z0 = ARENA.z - ARENA.r;
+  if (p.z > z0 - 0.4 && hallGrid) hallCollide(p, r);
+  else { p.x = clamp(p.x, -70, 70); p.z = clamp(p.z, -60, z0 + 0.5); }
+  if (!game.gateOpen && Math.abs(p.x) < 6.5 && p.z < 38) p.z = Math.min(p.z, 36.4);   // névoa fechada (só para quem vem de fora)
+}
+// colisão círculo x grade do salão: '.' é chão livre; parede, grade e fora do salão bloqueiam
+function hallBlocked(i, j) {
+  const g = hallGrid;
+  if (j < 0) return false;                                   // à frente da entrada (lado da muralha)
+  if (i < 0 || i >= g.nx || j >= g.nz) return true;
+  return g.rows[j][i] !== '.';
+}
+function hallCollide(p, r) {
+  const g = hallGrid, c = g.cell;
+  for (let it = 0; it < 2; it++) {
+    const i0 = Math.floor((p.x - r - g.x0) / c), i1 = Math.floor((p.x + r - g.x0) / c);
+    const j0 = Math.floor((p.z - r - g.z0) / c), j1 = Math.floor((p.z + r - g.z0) / c);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      if (!hallBlocked(i, j)) continue;
+      const cx = g.x0 + i * c, cz = g.z0 + j * c;
+      const nx = clamp(p.x, cx, cx + c), nz = clamp(p.z, cz, cz + c), dx = p.x - nx, dz = p.z - nz, d = Math.hypot(dx, dz);
+      if (d < r && d > 1e-5) { p.x = nx + dx / d * r; p.z = nz + dz / d * r; }
+    }
+  }
 }
 
 // névoa
@@ -386,30 +412,88 @@ function buildChessKnight(o) {
 }
 
 /* ------------------------------ cavaleiro (modelo .glb) ------------------------------ */
-let knightAsset = null;
-const KNIGHT = { scale: 0.16, facing: 0, idleFrom: 130, idleTo: 350 };   // frames da animação "Take 001"
-function buildKnight(o) {
+let knightAsset = null, bossAsset = null;
+// frames da animação "Take 001"; andar, correr, rolar e os cortes extras gerados no Blender (tools/blender/knight_anims.py)
+const KNIGHT = {
+  scale: 0.16, facing: 0, idleFrom: 130, idleTo: 350,
+  walk: { from: 375, to: 435, stride: 2.4 },   // stride = metros por ciclo (sincroniza os pés com o deslocamento)
+  run:  { from: 450, to: 490, stride: 3.6 },
+  runAbove: 5.5,                                // m/s a partir do qual usa a corrida
+  roll: { from: 500, to: 535 },
+  // golpes: [início, fim da preparação, fim do golpe, fim da recuperação]
+  clips: { vertical: [0, 30, 42, 130], sweep: [550, 572.5, 577.5, 625], diag: [650, 672.5, 677.5, 725] },
+};
+// chefe: boss.glb ("Tillagemon Boss Skeleton", Vasian-Digital3D, CC-BY-4.0) com animações próprias
+const BOSS = {
+  scale: 0.25,                                  // multiplicado pelo scale do CONFIG (2.5) => 0.625 m por unidade
+  walk: { clip: 'Battle_Walk', stride: 3.1 },   // stride em unidades do modelo
+  run:  { clip: 'Battle_Run',  stride: 3.1 },
+  runAbove: 2.2,
+};
+function instantiate(asset, scale, o) {
   const root = new BABYLON.TransformNode('ent', scene);
   const pivot = new BABYLON.TransformNode('pv', scene); pivot.parent = root; pivot.position.y = 0.9;
   const model = new BABYLON.TransformNode('md', scene); model.parent = pivot; model.position.y = -0.9;
-  const wrap = new BABYLON.TransformNode('wrap', scene); wrap.parent = model; wrap.scaling.setAll(KNIGHT.scale); wrap.rotation.y = KNIGHT.facing;
-  const inst = knightAsset.instantiateModelsToScene(n => n, true);
+  const wrap = new BABYLON.TransformNode('wrap', scene); wrap.parent = model; wrap.scaling.setAll(scale);
+  const inst = asset.instantiateModelsToScene(n => n, true);
   inst.rootNodes[0].parent = wrap;
-  const meshes = inst.rootNodes[0].getChildMeshes(), mats = [];
-  meshes.forEach(m => {
+  const mats = [];
+  inst.rootNodes[0].getChildMeshes().forEach(m => {
     m.alwaysSelectAsActiveMesh = true;
     if (m.material && !mats.includes(m.material)) { m.material.maxSimultaneousLights = 8; mats.push(m.material); if (o.tint) m.material.albedoColor = new C3(o.tint[0], o.tint[1], o.tint[2]); }
   });
-  const anim = inst.animationGroups[0]; anim.start(false, 1, 0, 0); anim.pause();
+  inst.animationGroups.forEach(g => { g.start(false, 1, g.from, g.to); g.pause(); });
   shadowCast(root);
   const dummy = () => new BABYLON.TransformNode('j', scene);
-  return { root, pivot, model, rArm: dummy(), lArm: dummy(), legL: dummy(), legR: dummy(), mats, glb: true, anim };
+  return { root, pivot, model, rArm: dummy(), lArm: dummy(), legL: dummy(), legR: dummy(), mats, groups: inst.animationGroups };
+}
+function buildKnight(o) {
+  const h = instantiate(knightAsset, KNIGHT.scale, o);
+  h.glb = true; h.anim = h.groups[0]; return h;
+}
+function buildBoss(o) {
+  const h = instantiate(bossAsset, BOSS.scale, {});
+  h.bossRig = true; h.clips = {};
+  h.groups.forEach(g => {
+    // o exportador do Sketchfab põe uma chave extra no tempo 0: o clipe começa na segunda chave
+    g.clipFrom = Math.min(...g.targetedAnimations.map(t => { const k = t.animation.getKeys(); return k[k.length > 1 ? 1 : 0].frame; }));
+    h.clips[g.name.replace(/^TillagemonBoss\d*_/, '')] = g;
+  });
+  h.pose = (name, u) => { const g = h.clips[name]; g.goToFrame(g.clipFrom + clamp(u, 0, 1) * (g.to - g.clipFrom)); };
+  h.len = name => (h.clips[name].to - h.clips[name].clipFrom) / 60;
+  return h;
 }
 const BLACK = new C3(0, 0, 0), FLASH = new C3(0.75, 0.15, 0.1), RAGE = new C3(0.35, 0, 0);
 const setEmissive = (mats, c) => mats.forEach(m => m.emissiveColor = c);
-function animateLimbs(h, speed, dt, o) {
+function gaitCycle(o, g, signedSpeed, s, dt) { // avança o ciclo de passos; velocidade negativa anda de costas
+  if (o.gait !== g) { o.gait = g; o.cycle = 0; }
+  return o.cycle = ((o.cycle + Math.sign(signedSpeed) * s * dt / g.stride) % 1 + 1) % 1;
+}
+function animateLimbs(h, signedSpeed, dt, o) {
+  const speed = Math.abs(signedSpeed);
   o.phase = (o.phase || 0) + speed * dt * 1.5;
-  if (h.glb) { // cavaleiro: respira (idle) e desliza com leve inclinação
+  if (h.bossRig) { // chefe: parado, andando ou correndo com os clipes do modelo
+    if (o.armsBusy) return;
+    const s = speed / h.root.scaling.x;
+    if (speed < 0.3) { o.clock = (o.clock || 0) + dt; o.gait = null; h.pose('Battle_Stand', (o.clock / h.len('Battle_Stand')) % 1); }
+    else { const g = speed > BOSS.runAbove ? BOSS.run : BOSS.walk; h.pose(g.clip, gaitCycle(o, g, signedSpeed, s / BOSS.scale, dt)); }
+    h.model.rotation.x = o.flinch || 0;
+    return;
+  }
+  if (h.glb && !o.noLocomotion) { // cavaleiro: idle parado, ciclos de andar/correr em movimento
+    if (o.armsBusy) return;
+    const s = speed / h.root.scaling.x;                      // velocidade em escala do modelo
+    if (s < 0.3) {
+      o.clock = (o.clock || 0) + dt; o.gait = null;
+      h.anim.goToFrame(KNIGHT.idleFrom + (o.clock * 60) % (KNIGHT.idleTo - KNIGHT.idleFrom));
+    } else {
+      const g = s > KNIGHT.runAbove ? KNIGHT.run : KNIGHT.walk;
+      h.anim.goToFrame(g.from + gaitCycle(o, g, signedSpeed, s, dt) * (g.to - g.from));
+    }
+    h.model.position.y = -0.9; h.model.rotation.x = o.flinch || 0;
+    return;
+  }
+  if (h.glb) { // chefe sem boss.glb: respira (idle) e desliza com leve inclinação
     const k = clamp(speed / 6, 0, 1);
     if (!o.armsBusy) {
       o.clock = (o.clock || 0) + dt * (1 + k * 1.6);
@@ -429,15 +513,22 @@ function animateLimbs(h, speed, dt, o) {
   h.legL.rotation.x = s * amp; h.legR.rotation.x = -s * amp;
   if (!o.armsBusy) { h.lArm.rotation.x = -s * amp * 0.7; h.rArm.rotation.x = s * amp * 0.7; }
 }
-function armPose(h, stage, p, raise = -3.2, strike = -1.1) {
-  if (h.glb) { // quadros da animação: 0-30 ergue, 30-42 golpe, 42-130 recupera
-    h.anim.goToFrame(stage === 'windup' ? lerp(0, 30, p) : stage === 'active' ? lerp(30, 42, p) : lerp(42, 130, p));
+// pose de ataque; a = definição do ataque (clipe do cavaleiro ou animação do chefe)
+function armPose(h, stage, p, a) {
+  if (h.bossRig) {
+    const [w, e] = a.hit;
+    h.pose(a.anim, stage === 'windup' ? lerp(0, w, p) : stage === 'active' ? lerp(w, e, p) : lerp(e, 1, p)); return;
+  }
+  if (h.glb) {
+    const [f0, w, e, f1] = KNIGHT.clips[(a && a.clip) || 'vertical'];
+    h.anim.goToFrame(stage === 'windup' ? lerp(f0, w, p) : stage === 'active' ? lerp(w, e, p) : lerp(e, f1, p));
     h.model.rotation.x = stage === 'active' ? 0.12 : 0; return;
   }
   if (h.chess) { // cavalo: empina para trás e investe com a cabeça
     const k = stage === 'windup' ? -easeOut(p) : stage === 'active' ? lerp(-1, 1, p) : lerp(1, 0, p * p * (3 - 2 * p));
     h.rArm.rotation.x = k * 0.8; h.model.rotation.x = k * 0.3; return;
   }
+  const raise = -3.2, strike = -1.1;
   if (stage === 'windup') h.rArm.rotation.x = lerp(0, raise, easeOut(p));
   else if (stage === 'active') h.rArm.rotation.x = lerp(raise, strike, p);
   else h.rArm.rotation.x = lerp(strike, 0, p * p * (3 - 2 * p));
@@ -449,7 +540,7 @@ const game = {
   lock: null, bonfire: bonfires[0], stain: null,
 };
 const keys = {}, pressed = {};
-const cam = { yaw: 0, pitch: 0.35, dist: 6.5 };
+const cam = { yaw: 0, pitch: 0.35, dist: 6.5, cur: 6.5 };   // cur = distância real (encurta ao bater em paredes)
 let shake = 0;
 
 /* ------------------------------ jogador ------------------------------ */
@@ -508,8 +599,8 @@ const enemies = [];
 class Enemy {
   constructor(type, x, z) {
     this.type = type; this.def = CONFIG.enemies[type]; this.home = new V3(x, 0, z);
-    this.h = knightAsset ? buildKnight(this.def.look) : buildChessKnight(this.def.look); this.root = this.h.root; this.root.scaling.setAll(this.def.scale);
-    this.pos = this.root.position; this.radius = 0.5 * this.def.scale; this.anim = {};
+    this.h = this.def.boss && bossAsset ? buildBoss(this.def.look) : knightAsset ? buildKnight(this.def.look) : buildChessKnight(this.def.look); this.root = this.h.root; this.root.scaling.setAll(this.def.scale);
+    this.pos = this.root.position; this.radius = 0.5 * this.def.scale; this.anim = { noLocomotion: !!this.def.boss };
     if (this.def.attacks.some(a => a.kind === 'aoe' || a.kind === 'leap')) {
       this.ring = BABYLON.MeshBuilder.CreateDisc('ring', { radius: 1, tessellation: 48 }, scene);
       this.ring.rotation.x = Math.PI / 2; this.ring.position.y = 0.06;
@@ -596,7 +687,7 @@ class Enemy {
       case 'windup': {
         this.t += dt; const p = clamp(this.t / this.windDur, 0, 1), a = this.atk;
         if (this.t < this.windDur * 0.6) this.root.rotation.y = turnToward(this.root.rotation.y, want, (this.def.boss ? 3 : 2.2) * dt);
-        armPose(this.h, 'windup', p);
+        armPose(this.h, 'windup', p, a);
         if (this.ring) {
           const f = this.root.rotation.y;
           if (a.kind === 'aoe') { this.ring.setEnabled(true); this.ring.scaling.setAll(a.radius); this.ring.position.x = this.pos.x + Math.sin(f) * a.reach; this.ring.position.z = this.pos.z + Math.cos(f) * a.reach; }
@@ -611,7 +702,7 @@ class Enemy {
       }
       case 'active': {
         this.t += dt; const a = this.atk, p = clamp(this.t / a.active, 0, 1);
-        armPose(this.h, 'active', p);
+        armPose(this.h, 'active', p, a);
         if (a.kind === 'leap') {
           this.pos.x = lerp(this.leapFrom.x, this.leapTo.x, p); this.pos.z = lerp(this.leapFrom.z, this.leapTo.z, p);
           this.pos.y = Math.sin(p * Math.PI) * 4;
@@ -624,7 +715,7 @@ class Enemy {
       }
       case 'recover': {
         this.t += dt; const a = this.atk, r = a.recover * (this.phase === 2 ? 0.75 : 1);
-        armPose(this.h, 'recover', clamp(this.t / r, 0, 1));
+        armPose(this.h, 'recover', clamp(this.t / r, 0, 1), a);
         if (this.t >= r) { this.state = 'chase'; this.cd = (0.3 + Math.random() * 0.7) * (this.phase === 2 ? 0.6 : 1); this.strafe = Math.random() < 0.5 ? 1 : -1; }
         break;
       }
@@ -638,7 +729,7 @@ class Enemy {
     resolveWorld(this.pos, this.radius);
     this.anim.flinch = this.state === 'stagger' ? -0.3 * Math.sin(Math.PI * clamp(this.t / this.stagDur, 0, 1)) : 0;
     this.anim.armsBusy = this.introPose || this.state === 'windup' || this.state === 'active' || this.state === 'recover';
-    animateLimbs(this.h, Math.abs(moveSpeed), dt, this.anim);
+    animateLimbs(this.h, moveSpeed, dt, this.anim);
   }
 }
 const SPAWNS = [
@@ -646,9 +737,29 @@ const SPAWNS = [
   ['knight', 14, 29], ['knight', -14, 29], ['boss', 0, 66],
 ];
 let boss = null;
+// salão do castelo ("Complete Medieval Tiled Castle Interior", Teranox, CC-BY-4.0)
+async function loadHall() {
+  const [hall, grid] = await Promise.all([
+    BABYLON.SceneLoader.LoadAssetContainerAsync('assets/', 'castle_hall.glb', scene),
+    fetch('assets/castle_hall_grid.json').then(r => r.json()),
+  ]);
+  hall.addAllToScene();
+  hall.rootNodes.forEach(n => n.position.y = 0.02);          // piso do salão logo acima do chão externo
+  hall.meshes.forEach(m => {
+    if (!m.getTotalVertices()) return;
+    m.isPickable = false; m.freezeWorldMatrix(); m.receiveShadows = true; sg.addShadowCaster(m);
+    if (m.material) m.material.maxSimultaneousLights = 8;
+    if (!/Bars/.test(m.name)) hallWalls.push(m);              // grades são vazadas: a câmera passa por elas
+  });
+  hallGrid = grid;
+}
 async function loadAssets() {
   try { knightAsset = await BABYLON.SceneLoader.LoadAssetContainerAsync('assets/', 'knight.glb', scene); }
   catch (err) { console.warn('knight.glb não carregou, usando o cavalo procedural', err); }
+  try { await loadHall(); }
+  catch (err) { console.warn('castle_hall.glb não carregou', err); }
+  try { bossAsset = await BABYLON.SceneLoader.LoadAssetContainerAsync('assets/', 'boss.glb', scene); }
+  catch (err) { console.warn('boss.glb não carregou, o chefe usa o modelo do cavaleiro', err); }
   if (knightAsset) { // jogador também vira cavaleiro (azul)
     const old = P.root, k = buildKnight({ tint: [0.45, 0.6, 1.0] });
     k.shield = new BABYLON.TransformNode('shield', scene);
@@ -678,7 +789,9 @@ function bossDefeated() { // chamado quando o chefe morre: inicia a cutscene
     a0: Math.atan2(P.pos.x - B.x, P.pos.z - B.z), startPos: camera.position.clone(), startTgt: camera.getTarget().clone(),
   };
   P.state = 'free'; P.atk = null; P.buf = null; P.blocking = false; game.lock = null;
-  boss.introPose = true; if (boss.h.anim) boss.h.anim.goToFrame(42); boss.h.model.rotation.x = 0.12;
+  boss.introPose = true;
+  if (boss.h.bossRig) boss.h.pose('Damage_Die', 0);
+  else { if (boss.h.anim) boss.h.anim.goToFrame(42); boss.h.model.rotation.x = 0.12; }
   setEmissive(boss.h.mats, FLASH); sfx('hit'); shake = 0.7;
   $('boss').style.display = 'none';
   $('title').firstElementChild.textContent = 'INIMIGO ABATIDO'; $('title').lastElementChild.textContent = '+' + boss.def.souls + ' almas';
@@ -689,7 +802,8 @@ function updateDeathCut(dt) {
   if ((t > 1.0 && (pressed.Space || pressed.Enter || pressed.KeyE || pressed.M0)) || t >= 9) return endDeathCut();
   const sm = x => x * x * (3 - 2 * x);
   const kneel = sm(clamp((t - 0.35) / 2.2, 0, 1)), fall = Math.pow(clamp((t - 3.0) / 1.0, 0, 1), 2);
-  h.pivot.rotation.x = lerp(0, 0.35, kneel) + 1.15 * fall; h.pivot.position.y = 0.9 - 0.3 * kneel - 0.35 * fall;
+  if (h.bossRig) h.pose('Damage_Die', (t - 0.35) / 3.55);           // desaba e toca o chão em t = 3.9
+  else { h.pivot.rotation.x = lerp(0, 0.35, kneel) + 1.15 * fall; h.pivot.position.y = 0.9 - 0.3 * kneel - 0.35 * fall; }
   if (t >= 0.35 && c.flashed) { c.flashed = false; setEmissive(h.mats, BLACK); }
   if (t >= 3.9 && !c.impact) { c.impact = true; burst(new V3(B.x, 0.4, B.z), 100); sfx('slam'); shake = Math.max(shake, 0.6); }
   if (t >= 4.0 && !c.ember) { c.ember = true; c.emb.emitRate = 260; setArenaMood('dead'); }
@@ -749,8 +863,14 @@ function startRoll(dir) {
   P.root.rotation.y = Math.atan2(dir.x, dir.z); sfx('roll');
 }
 function startAttack(kind) {
+  let combo = 0;
+  if (kind === 'light') { // encadeia se o golpe anterior também era leve
+    const chain = CONFIG.player.combo;
+    combo = P.state === 'attack' && P.atk && P.atk.combo !== undefined ? (P.atk.combo + 1) % chain.length : 0;
+    kind = chain[combo];
+  }
   const def = CONFIG.player[kind]; spend(def.stamina);
-  P.state = 'attack'; P.t = 0; P.atk = { ...def, heavy: kind === 'heavy', hit: false }; P.blocking = false;
+  P.state = 'attack'; P.t = 0; P.atk = { ...def, heavy: kind === 'heavy', hit: false, combo: kind === 'heavy' ? undefined : combo }; P.blocking = false;
   if (game.lock) P.root.rotation.y = Math.atan2(game.lock.pos.x - P.pos.x, game.lock.pos.z - P.pos.z);
   else { // assistência de mira
     let best = null, bd = 4.5;
@@ -764,7 +884,7 @@ function playerStrike() {
   for (const e of enemies) {
     if (e.dead || !e.root.isEnabled()) continue;
     const dx = e.pos.x - P.pos.x, dz = e.pos.z - P.pos.z, d = Math.hypot(dx, dz);
-    if (d < a.range + e.radius && Math.abs(angDiff(f, Math.atan2(dx, dz))) < 1.0) e.damage(a.dmg * P.dmgMult, a.heavy);
+    if (d < a.range + e.radius && Math.abs(angDiff(f, Math.atan2(dx, dz))) < a.arc) e.damage(a.dmg * P.dmgMult, a.heavy);
   }
 }
 function tryAction(act, mv) {
@@ -810,7 +930,9 @@ function updatePlayer(dt) {
     case 'roll': {
       const D = 0.55, p = P.t / D;
       P.pos.x += P.rollDir.x * CONFIG.player.roll * (1 - 0.5 * p) * dt; P.pos.z += P.rollDir.z * CONFIG.player.roll * (1 - 0.5 * p) * dt;
-      P.h.pivot.rotation.x = p * Math.PI * 2; armsBusy = true;
+      if (P.h.glb) P.h.anim.goToFrame(lerp(KNIGHT.roll.from, KNIGHT.roll.to, clamp(p, 0, 1))); // cambalhota com as juntas (Blender)
+      else P.h.pivot.rotation.x = p * Math.PI * 2;
+      armsBusy = true;
       if (P.t >= D) { P.state = 'free'; P.h.pivot.rotation.x = 0; }
       break;
     }
@@ -819,10 +941,10 @@ function updatePlayer(dt) {
       armsBusy = true;
       const lunge = P.t < tA ? (a.heavy ? 3.5 : 2.5) : 0;
       P.pos.x += Math.sin(f) * lunge * dt; P.pos.z += Math.cos(f) * lunge * dt;
-      if (P.t < tW) armPose(P.h, 'windup', P.t / tW);
-      else if (P.t < tA) { if (!a.hit) { a.hit = true; playerStrike(); } armPose(P.h, 'active', (P.t - tW) / a.active); }
+      if (P.t < tW) armPose(P.h, 'windup', P.t / tW, a);
+      else if (P.t < tA) { if (!a.hit) { a.hit = true; playerStrike(); } armPose(P.h, 'active', (P.t - tW) / a.active, a); }
       else {
-        armPose(P.h, 'recover', (P.t - tA) / a.recover);
+        armPose(P.h, 'recover', (P.t - tA) / a.recover, a);
         if (P.buf && (P.buf.a === 'roll' || (P.t - tA) > a.recover * 0.45)) { if (tryAction(P.buf.a, mv)) { P.buf = null; P.h.rArm.rotation.x = 0; break; } }
         if (P.t >= tR) { P.state = 'free'; P.h.rArm.rotation.x = 0; }
       }
@@ -848,7 +970,7 @@ function updatePlayer(dt) {
   // escudo: costas quando solto, à frente quando defendendo
   if (P.blocking) { P.h.shield.position.set(0, 1.2, 0.45); P.h.shield.rotation.set(Math.PI / 2, 0, 0); }
   else { P.h.shield.position.set(0.15, 1.15, -0.28); P.h.shield.rotation.set(Math.PI / 2, 0, 0.25); }
-  P.anim.armsBusy = P.h.glb ? P.state === 'attack' : armsBusy;
+  P.anim.armsBusy = P.h.glb ? P.state === 'attack' || P.state === 'roll' : armsBusy;
   P.anim.flinch = P.blocking ? 0.12 : 0;
   animateLimbs(P.h, speed, dt, P.anim);
   if (P.state !== 'dead') {
@@ -934,14 +1056,14 @@ function endCutscene() {
 }
 function updateCutscene(dt) {
   if (game.cut.kind === 'death') return updateDeathCut(dt);
-  const c = game.cut; c.t += dt; const t = c.t, B = boss.pos;
+  const c = game.cut; c.t += dt; const t = c.t, B = boss.pos, slam = boss.def.attacks.find(a => a.kind === 'aoe');
   if ((c.t > 0.8 && (pressed.Space || pressed.Enter || pressed.KeyE || pressed.M0)) || t >= 6.2) return endCutscene();
   // pose do chefe: ergue a espada e bate no chao
   if (t >= 1.9) {
     boss.introPose = true;
-    if (t < 3.5) armPose(boss.h, 'windup', clamp((t - 1.9) / 1.6, 0, 1));
-    else if (t < 3.62) armPose(boss.h, 'active', (t - 3.5) / 0.12);
-    else armPose(boss.h, 'recover', clamp((t - 3.62) / 1.8, 0, 1));
+    if (t < 3.5) armPose(boss.h, 'windup', clamp((t - 1.9) / 1.6, 0, 1), slam);
+    else if (t < 3.62) armPose(boss.h, 'active', (t - 3.5) / 0.12, slam);
+    else armPose(boss.h, 'recover', clamp((t - 3.62) / 1.8, 0, 1), slam);
   }
   if (t >= 3.62 && !c.slam) {
     c.slam = true; const f = boss.root.rotation.y;
@@ -976,7 +1098,15 @@ function updateCamera(dt) {
   cam.dist = lerp(cam.dist, game.lock && game.lock.def.boss ? 11 : 6.5, 3 * dt);
   const piv = new V3(P.pos.x, 1.7, P.pos.z), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   const dir = new V3(Math.sin(cam.yaw) * cp, -sp, Math.cos(cam.yaw) * cp);
-  const pos = piv.subtract(dir.scale(cam.dist)); pos.y = Math.max(pos.y, 0.5);
+  let dist = cam.dist;
+  if (hallWalls.length && P.pos.z > ARENA.z - ARENA.r - 4) {
+    const ray = new BABYLON.Ray(piv, dir.scale(-1), cam.dist + 0.4);
+    const inside = P.pos.z > fogGate.position.z;          // de dentro do salão a névoa também segura a câmera
+    const hit = scene.pickWithRay(ray, m => hallWalls.includes(m) || (inside && m === fogGate && m.isEnabled()));
+    if (hit && hit.hit) dist = Math.max(1.2, hit.distance - 0.4);
+  }
+  cam.cur = dist < cam.cur ? dist : lerp(cam.cur, dist, 5 * dt);   // entra rápido, sai suave
+  const pos = piv.subtract(dir.scale(cam.cur)); pos.y = Math.max(pos.y, 0.5);
   if (shake > 0) { pos.x += (Math.random() - 0.5) * shake; pos.y += (Math.random() - 0.5) * shake; shake = Math.max(0, shake - dt * 1.6); }
   camera.position.copyFrom(pos); camera.setTarget(piv);
   moon.position.set(P.pos.x + 30, 60, P.pos.z - 24);
