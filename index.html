@@ -17,8 +17,23 @@
   #hp > i { background:linear-gradient(#b32525,#6e1212); }
   #st > i { background:linear-gradient(#6ea048,#3d5f28); }
   #estus { font-size:14px; margin-top:4px; letter-spacing:1px; }
-  #souls { position:absolute; right:28px; bottom:22px; font-size:26px; text-shadow:0 0 8px #000; }
-  #souls small { display:block; font-size:12px; text-align:right; opacity:.7; letter-spacing:2px; }
+  #lives { position:absolute; right:28px; bottom:22px; font-size:26px; color:#c43030; text-shadow:0 0 8px #000; text-align:right; }
+  #lives small { display:block; font-size:12px; color:var(--gold); opacity:.7; letter-spacing:2px; }
+  #hunt { position:absolute; left:50%; top:20px; width:min(420px,44vw); transform:translateX(-50%); text-align:center; text-shadow:0 0 6px #000; }
+  #compass { position:relative; height:16px; overflow:hidden; border:1px solid #3a342a; background:rgba(0,0,0,.55); }
+  #compass::before { content:''; position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--gold); opacity:.6; }
+  #mark { position:absolute; top:2px; width:10px; height:10px; margin-left:-5px; background:#e0531f; transform:rotate(45deg); opacity:0; box-shadow:0 0 8px #e0531f; }
+  #signD { font-size:12px; letter-spacing:1px; opacity:.75; margin-top:3px; }
+  #status { font-size:14px; letter-spacing:3px; margin-top:3px; }
+  #status.danger { color:#d33; } #status.prey { color:#e8d28a; }
+  @media (max-width:1100px) { #hunt { top:72px; } }
+  #prompt small { font-size:13px; opacity:.75; }
+  #end { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; cursor:pointer; z-index:6; background:rgba(5,5,8,.86); }
+  #end.show { display:flex; }
+  #endT { font-size:clamp(28px,6vw,60px); letter-spacing:.12em; font-weight:700; }
+  #end.won #endT { color:#e8d28a; } #end.lost #endT { color:#a01818; }
+  #endS { font-size:18px; letter-spacing:2px; opacity:.85; }
+  #end .go { font-size:18px; letter-spacing:5px; animation:pulse 1.6s infinite; margin-top:8px; }
   #prompt { position:absolute; left:50%; bottom:18%; transform:translateX(-50%); font-size:18px; text-align:center; text-shadow:0 0 6px #000; line-height:1.6; }
   #msg { position:absolute; left:0; right:0; top:42%; text-align:center; font-size:46px; letter-spacing:8px; opacity:0; transition:opacity .8s; text-shadow:0 0 18px #000; }
   #msg.show { opacity:1; }
@@ -59,7 +74,8 @@
     <div class="bar" id="st"><i></i></div>
     <div id="estus"></div>
   </div>
-  <div id="souls"><small>ALMAS</small><span id="soulsN">0</span></div>
+  <div id="lives"><small>VIDAS</small><span id="livesN"></span></div>
+  <div id="hunt"><div id="compass"><div id="mark"></div></div><div id="signD"></div><div id="status"></div></div>
   <div id="prompt"></div>
   <div id="msg"></div>
   <div id="boss"><div class="name"></div><div class="bar"><i></i></div></div>
@@ -71,12 +87,17 @@
 
 <div class="lb" id="lbT"></div><div class="lb" id="lbB"></div>
 
+<div id="end"><div id="endT"></div><div id="endS"></div><div class="go">CLIQUE PARA CAÇAR DE NOVO</div></div>
+
 <div id="start">
   <h1>KELWIN SOULS</h1>
   <p>
+    <strong>Cace o monstro antes que ele cace você.</strong> Mate-o para vencer. Você tem 3 vidas.<br>
+    Siga as pegadas em brasa e a bússola do rugido. Correr e lutar fazem barulho: ele ouve.<br>
+    Ataque antes de ele te notar para causar dano de emboscada.<br><br>
     <kbd>W A S D</kbd> mover &nbsp; <kbd>Mouse</kbd> câmera &nbsp; <kbd>Shift</kbd> correr &nbsp; <kbd>Espaço</kbd> rolar<br>
     <kbd>Botão esq.</kbd> ataque leve &nbsp; <kbd>Botão dir.</kbd> ataque pesado &nbsp; <kbd>F</kbd> defender<br>
-    <kbd>Q</kbd> fixar alvo &nbsp; <kbd>R</kbd> Estus &nbsp; <kbd>E</kbd> interagir (fogueira / névoa) &nbsp; <kbd>L</kbd> subir de nível (na fogueira)<br>
+    <kbd>Q</kbd> fixar alvo &nbsp; <kbd>R</kbd> Estus &nbsp; <kbd>E</kbd> descansar na fogueira<br>
     <kbd>← →</kbd> girar câmera sem mouse lock &nbsp; <kbd>Esc</kbd> soltar o mouse
   </p>
   <div class="go" id="goText">CARREGANDO...</div>

@@ -1,6 +1,6 @@
 'use strict';
 /* ======================================================================
-   KELWIN SOULS — protótipo soulslike em Babylon.js
+   KELWIN SOULS — caça ao monstro em Babylon.js
    Mexa no CONFIG abaixo para criar suas próprias alterações.
    ====================================================================== */
 
@@ -15,30 +15,28 @@ const CONFIG = {
     heavy:  { windup: 0.50, active: 0.15, recover: 0.55, stamina: 30, dmg: 50, range: 3.3, arc: 1.0, clip: 'vertical' },
     combo: ['light', 'sweep', 'diag'],
   },
-  levelUp: { baseCost: 100, costPerLevel: 60, hpPerLevel: 10, dmgPerLevel: 0.08 },
+  // a caçada: você persegue o monstro e ele persegue você
+  hunt: {
+    lives: 3,               // mortes permitidas antes de o monstro vencer
+    ambushMult: 2.5,        // dano ao atacar o monstro antes de ele notar você
+    sight: 26, sightArc: 70,                         // alcance (m) e meia abertura (graus) da visão do monstro
+    noise: { sprint: 28, fight: 18, roll: 14, walk: 8 },   // de quantos metros ele ouve cada ação
+    scentEvery: 11, scentErr: [20, 6],               // de quanto em quanto tempo fareja você e o erro (m) da pista: começa grande e diminui
+    roarEvery: [18, 30],                             // intervalo entre rugidos: é a sua pista de onde ele está
+    fleeAt: [0.66, 0.33],                            // fração da vida em que ele foge para se recuperar
+    lurkTime: 9, lurkHeal: 0.05,                     // tempo escondido e vida recuperada (fração)
+    trackLife: 60,                                   // segundos até uma pegada sumir
+  },
   enemies: {
-    hollow: {
-      name: 'Oco', hp: 60, speed: 3.1, souls: 40, scale: 1, aggro: 14, stopDist: 2.1,
-      look: { tint: [0.62, 0.78, 0.55], skin: [0.55, 0.6, 0.5], armor: [0.25, 0.22, 0.2], eye: [1, 0.5, 0.1], weapon: 0.9 },
-      attacks: [{ kind: 'melee', windup: 0.7, active: 0.15, recover: 0.8, range: 2.5, arc: 80, dmg: 20 }],
-    },
-    knight: {
-      name: 'Cavaleiro Sombrio', hp: 150, speed: 2.5, souls: 150, scale: 1.18, aggro: 15, stopDist: 2.5,
-      look: { tint: [0.55, 0.62, 1.0], skin: [0.3, 0.3, 0.35], armor: [0.12, 0.12, 0.18], eye: [0.3, 0.6, 1], weapon: 1.25 },
-      attacks: [
-        { kind: 'melee', windup: 0.65, active: 0.15, recover: 0.9, range: 3.0, arc: 80, dmg: 34 },
-        { kind: 'melee', windup: 1.0, active: 0.15, recover: 1.1, range: 3.3, arc: 100, dmg: 48 },
-      ],
-    },
     boss: {
-      name: 'Guardião das Cinzas', subtitle: 'Sentinela do Trono Esquecido', hp: 900, speed: 3.6, souls: 2500, scale: 2.5, boss: true, stopDist: 4.2,
+      name: 'Monstro das Cinzas', hp: 900, speed: 4.4, huntSpeed: 2.1, alertSpeed: 3.6, fleeSpeed: 6.4, scale: 2.5, boss: true, stopDist: 4.2,
       look: { tint: [1.0, 0.45, 0.4], skin: [0.35, 0.3, 0.28], armor: [0.2, 0.08, 0.08], eye: [1, 0.15, 0.1], weapon: 1.6, horns: true },
       // anim = clipe do boss.glb; hit = [fim da preparação, fim do golpe] em fração do clipe
       attacks: [
         { kind: 'melee', windup: 0.6, active: 0.2, recover: 1.0, range: 5.0, arc: 70,  dmg: 38, maxD: 5.5, anim: 'Attack_Base_03', hit: [0.25, 0.38] },
         { kind: 'melee', windup: 0.6, active: 0.2, recover: 1.0, range: 5.0, arc: 140, dmg: 34, maxD: 5.5, anim: 'Attack_Base_01', hit: [0.28, 0.42] },
         { kind: 'aoe',   windup: 1.0, active: 0.2, recover: 1.3, radius: 6.0, reach: 4.0, dmg: 55, maxD: 5.5, anim: 'Attack_Base_02', hit: [0.25, 0.35] },
-        { kind: 'leap',  windup: 1.0, active: 0.5, recover: 1.1, radius: 4.5, dmg: 50, minD: 9, maxD: 26, anim: 'Attack_Base_09', hit: [0.3, 0.47] },
+        { kind: 'leap',  windup: 1.0, active: 0.5, recover: 1.1, radius: 4.5, dmg: 50, minD: 9, maxD: 18, anim: 'Attack_Base_09', hit: [0.3, 0.47] },
       ],
     },
   },
@@ -61,7 +59,7 @@ const engine = new BABYLON.Engine(canvas, true, { stencil: true });
 const scene = new BABYLON.Scene(engine);
 scene.clearColor = new BABYLON.Color4(0.04, 0.05, 0.07, 1);
 scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
-scene.fogDensity = 0.016;
+scene.fogDensity = 0.03;
 scene.fogColor = new C3(0.07, 0.08, 0.11);
 
 const camera = new BABYLON.FreeCamera('cam', new V3(0, 4, -8), scene);
@@ -144,9 +142,10 @@ const SFX = {
   swing: ['sawtooth', 320, 90, 0.12, 0.05], hit: ['square', 180, 50, 0.16, 0.12], block: ['triangle', 700, 300, 0.12, 0.12],
   roll: ['sine', 140, 70, 0.2, 0.1], hurt: ['sawtooth', 200, 60, 0.25, 0.14], estus: ['sine', 400, 900, 0.35, 0.1],
   slam: ['square', 90, 30, 0.5, 0.2], bonfire: ['sine', 220, 440, 0.8, 0.1], die: ['sawtooth', 160, 30, 1.2, 0.2],
+  roar: ['sawtooth', 130, 38, 1.5, 0.3], step: ['sine', 70, 35, 0.16, 0.3], heart: ['sine', 62, 40, 0.14, 0.22],
 };
-function sfx(k) {
-  if (!ac) return; const [type, f0, f1, dur, vol] = SFX[k], t = ac.currentTime;
+function sfx(k, gain = 1) {
+  if (!ac) return; const [type, f0, f1, dur, v] = SFX[k], t = ac.currentTime, vol = Math.max(v * gain, 0.0002);
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
@@ -154,177 +153,74 @@ function sfx(k) {
 }
 
 /* ------------------------------ mundo ------------------------------ */
-// arena do chefe = salão do castelo (assets/castle_hall.glb, gerado por tools/blender/castle_hall.py)
-// ARENA.z - ARENA.r é a entrada em arco do salão; a nave vai de x -9.3 a 9.9 e de z 37.5 a 78.5
-const ARENA = { x: 0, z: 57.5, r: 20 };
-const HALL = { x0: -9.3, x1: 9.9, z1: 78.3 };
-let hallGrid = null, hallWalls = [];
-const obstacles = [];
-
-// chão com textura procedural de pedra
-const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 240, height: 240 }, scene);
+// floresta morta (assets/forest.glb, gerada por tools/blender/forest.py); o mapa jogável vem da grade:
+// rows: '.' chão livre, '#' tronco, ' ' fora do escaneamento; heights: altura do chão em cm
+let worldGrid = null;
+function groundY(x, z) {
+  const g = worldGrid; if (!g) return 0;
+  const u = clamp((x - g.x0) / g.hcell, 0, g.hx - 1.001), v = clamp((z - g.z0) / g.hcell, 0, g.hz - 1.001), i = Math.floor(u), j = Math.floor(v), a = u - i, b = v - j, h = g.heights;
+  return lerp(lerp(h[j][i], h[j][i + 1], a), lerp(h[j + 1][i], h[j + 1][i + 1], a), b) / 100;
+}
+const OUTER_Y = -0.7;   // chão escuro além do escaneamento, some na névoa
 {
+  const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 600, height: 600 }, scene);
+  ground.position.y = OUTER_Y;
   const gm = new BABYLON.StandardMaterial('gm', scene), tex = new BABYLON.DynamicTexture('gt', 512, scene, true), c = tex.getContext();
-  c.fillStyle = '#4a4a4c'; c.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 900; i++) {
-    const g = 50 + Math.floor(rnd() * 50); c.fillStyle = `rgba(${g},${g},${g + 4},0.35)`;
-    c.beginPath(); c.arc(rnd() * 512, rnd() * 512, 6 + rnd() * 26, 0, 7); c.fill();
-  }
-  tex.update(); tex.uScale = tex.vScale = 30; gm.diffuseTexture = tex; gm.specularColor = new C3(0.02, 0.02, 0.02);
-  gm.maxSimultaneousLights = 8; ground.material = gm; ground.receiveShadows = true;
+  c.fillStyle = '#2a2520'; c.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 900; i++) { const g = 30 + Math.floor(rnd() * 30); c.fillStyle = `rgba(${g + 6},${g},${g - 6},0.35)`; c.beginPath(); c.arc(rnd() * 512, rnd() * 512, 6 + rnd() * 26, 0, 7); c.fill(); }
+  tex.update(); tex.uScale = tex.vScale = 60; gm.diffuseTexture = tex; gm.specularColor = C3.Black();
+  ground.material = gm;
 }
-const arenaFloor = BABYLON.MeshBuilder.CreateDisc('arena', { radius: 8.5, tessellation: 64 }, scene);   // círculo de runas no chão do salão
-arenaFloor.rotation.x = Math.PI / 2; arenaFloor.position.set(0.3, 0.07, ARENA.z);
-const runeTex = (() => {
-  const t = new BABYLON.DynamicTexture('runes', 1024, scene, true), c = t.getContext(), R = 512;
-  c.fillStyle = '#000'; c.fillRect(0, 0, 1024, 1024); c.translate(R, R);
-  c.strokeStyle = '#ff5a1f'; c.lineCap = 'round';
-  const ring = (r, w) => { c.lineWidth = w; c.beginPath(); c.arc(0, 0, r, 0, 7); c.stroke(); };
-  ring(498, 6); ring(470, 3); ring(330, 5); ring(318, 2); ring(150, 4);
-  for (let i = 0; i < 48; i++) { // marcas entre os aneis externos
-    c.save(); c.rotate(i / 48 * Math.PI * 2); c.lineWidth = 3; c.beginPath(); c.moveTo(0, -470); c.lineTo(0, -498); c.stroke(); c.restore();
+// troncos distantes além do limite do mapa, para a floresta não acabar no vazio
+function addFarTrees() {
+  const g = worldGrid, trunk = BABYLON.MeshBuilder.CreateCylinder('farTree', { diameterTop: 0.25, diameterBottom: 0.8, height: 30, tessellation: 7 }, scene);
+  trunk.material = mat([0.1, 0.085, 0.07]); trunk.isPickable = false;
+  for (let n = 0; n < 320;) {
+    const x = (rnd() - 0.5) * 220, z = (rnd() - 0.5) * 300;
+    const i = Math.floor((x - g.x0) / g.cell), j = Math.floor((z - g.z0) / g.cell);
+    n++;
+    if (j >= 0 && j < g.nz && i >= 0 && i < g.nx) continue;
+    trunk.thinInstanceAdd(BABYLON.Matrix.Translation(x, OUTER_Y + 15, z), n === 320);
   }
-  for (let i = 0; i < 12; i++) { // glifos entre os aneis 330 e 470
-    c.save(); c.rotate(i / 12 * Math.PI * 2); c.lineWidth = 4; const y = -400;
-    c.beginPath(); c.moveTo(-16, y + 26); c.lineTo(0, y - 28); c.lineTo(16, y + 26); c.moveTo(-22, y + 4); c.lineTo(22, y + 4);
-    if (i % 3 === 0) { c.moveTo(0, y - 28); c.lineTo(0, y - 46); }
-    c.stroke(); c.restore();
-  }
-  c.lineWidth = 4; for (const off of [0, Math.PI / 6]) { // sigilo central: duas estrelas de 6 pontas
-    c.beginPath(); for (let i = 0; i <= 6; i++) { const a = off + i / 3 * Math.PI * 2 - Math.PI / 2; c.lineTo(Math.cos(a) * 300, Math.sin(a) * 300); } c.stroke();
-  }
-  c.lineWidth = 6; c.beginPath(); c.arc(0, 0, 40, 0, 7); c.stroke(); c.fillStyle = '#ff5a1f'; c.beginPath(); c.arc(0, 0, 14, 0, 7); c.fill();
-  t.update(); return t;
-})();
-{
-  const m = mat([0, 0, 0]); m.emissiveTexture = runeTex; runeTex.level = 0.25; m.backFaceCulling = false;
-  m.opacityTexture = runeTex; m.zOffset = -2;            // só as linhas das runas aparecem sobre o piso
-  arenaFloor.material = m;
 }
 
-// pilares / ruínas
-const pillarMat = mat([0.55, 0.55, 0.58]);
-{
-  const t = new BABYLON.DynamicTexture('stoneT', 256, scene, true), c = t.getContext();
-  c.fillStyle = '#4c4c50'; c.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 40; i++) { c.fillStyle = `rgba(20,20,24,${0.15 + Math.random() * 0.2})`; c.fillRect(0, Math.random() * 256, 256, 1 + Math.random() * 3); }       // juntas/estrias
-  for (let i = 0; i < 300; i++) { const g = 60 + Math.random() * 40; c.fillStyle = `rgba(${g},${g + 4},${g},0.3)`; c.beginPath(); c.arc(Math.random() * 256, Math.random() * 256, 2 + Math.random() * 10, 0, 7); c.fill(); }
-  for (let i = 0; i < 120; i++) { c.fillStyle = 'rgba(40,70,35,0.22)'; c.beginPath(); c.arc(Math.random() * 256, 170 + Math.random() * 86, 3 + Math.random() * 12, 0, 7); c.fill(); } // musgo na base
-  t.update(); t.uScale = 2; t.vScale = 3; pillarMat.diffuseTexture = t;
+function resolveWorld(p, r) { gridCollide(p, r); }
+// colisão círculo x grade: só o chão livre não bloqueia
+function gridBlocked(i, j) {
+  const g = worldGrid;
+  return i < 0 || j < 0 || i >= g.nx || j >= g.nz || g.rows[j][i] !== '.';
 }
-function addPillar(x, z, r, h, tilt) {
-  const p = BABYLON.MeshBuilder.CreateCylinder('pillar', { diameter: r * 2, height: h, tessellation: 10 }, scene);
-  p.position.set(x, h / 2, z); p.material = pillarMat; if (tilt) p.rotation.z = tilt; sg.addShadowCaster(p); p.receiveShadows = true;
-  obstacles.push({ x, z, r: r * 0.95 });
-}
-const keepClear = [[0, 0, 7], [0, 24, 7], [0, 36, 8]];
-for (let i = 0; i < 46; i++) {
-  const x = (rnd() - 0.5) * 120, z = -50 + rnd() * 84;
-  if (keepClear.some(([a, b, r]) => Math.hypot(x - a, z - b) < r)) continue;
-  addPillar(x, z, 0.7 + rnd() * 0.5, 3 + rnd() * 6, rnd() < 0.2 ? (rnd() - 0.5) * 0.25 : 0);
-}
-// muralha com a névoa no meio
-for (let x = -60; x <= 60; x += 2.6) { if (Math.abs(x) < 6) continue; addPillar(x, 36, 1.35, 8 + rnd() * 2); }
-// ---- decoracao da arena do chefe ----
-const arenaLight = new BABYLON.PointLight('arenaL', new V3(0.3, 6, ARENA.z), scene);
-arenaLight.diffuse = new C3(1, 0.3, 0.15); arenaLight.range = 45; arenaLight.intensity = 0.3;
-const brazierLights = [];
-const braziers = [];
-{
-  const stone = mat([0.2, 0.2, 0.22]), cloth = mat([0.35, 0.05, 0.06], [0.08, 0.0, 0.0]); cloth.backFaceCulling = false;
-  const clothTex = new BABYLON.DynamicTexture('banner', { width: 64, height: 256 }, scene, true), bc = clothTex.getContext();
-  bc.fillStyle = '#4a0a0d'; bc.fillRect(0, 0, 64, 256); bc.fillStyle = '#b8964a'; bc.fillRect(4, 0, 3, 256); bc.fillRect(57, 0, 3, 256);
-  bc.strokeStyle = '#b8964a'; bc.lineWidth = 3; bc.beginPath(); bc.arc(32, 90, 14, 0, 7); bc.moveTo(32, 60); bc.lineTo(32, 150); bc.moveTo(14, 110); bc.lineTo(50, 110); bc.stroke();
-  clothTex.update(); cloth.diffuseTexture = clothTex; cloth.emissiveColor = new C3(0.12, 0.02, 0.02);
-  // estandartes nas paredes laterais, voltados para o centro
-  for (const [x, z] of [[HALL.x0 + 0.08, 54], [HALL.x0 + 0.08, 62], [HALL.x1 - 0.08, 54], [HALL.x1 - 0.08, 62], [HALL.x0 + 0.08, 41], [HALL.x1 - 0.08, 41]]) {
-    const b = BABYLON.MeshBuilder.CreatePlane('banner', { width: 2.2, height: 5.2 }, scene);
-    b.position.set(x, 4.2, z); b.rotation.y = Math.PI / 2; b.material = cloth;
-  }
-  // braseiros ao longo da nave (fora das passagens para as celas em z 48 e 68)
-  for (const [x, z] of [[-7.4, 43], [8, 43], [-7.4, 57.5], [8, 57.5], [-7.4, 73], [8, 73]]) {
-    const base = BABYLON.MeshBuilder.CreateCylinder('brb', { diameterTop: 0.5, diameterBottom: 0.9, height: 1.3 }, scene); base.position.set(x, 0.65, z); base.material = stone;
-    const bowl = BABYLON.MeshBuilder.CreateCylinder('brw', { diameterTop: 1.3, diameterBottom: 0.6, height: 0.4 }, scene); bowl.position.set(x, 1.5, z); bowl.material = stone;
-    sg.addShadowCaster(base);
-    obstacles.push({ x, z, r: 0.5 });
-    const ps = new BABYLON.ParticleSystem('brazier', 150, scene);
-    ps.particleTexture = flareTex; ps.emitter = new V3(x, 1.7, z); ps.minEmitBox = new V3(-0.25, 0, -0.25); ps.maxEmitBox = new V3(0.25, 0, 0.25);
-    ps.color1 = new BABYLON.Color4(1, 0.55, 0.15, 1); ps.color2 = new BABYLON.Color4(1, 0.25, 0.05, 1); ps.colorDead = new BABYLON.Color4(0.3, 0, 0, 0);
-    ps.minSize = 0.3; ps.maxSize = 0.8; ps.minLifeTime = 0.4; ps.maxLifeTime = 1.2; ps.emitRate = 0;
-    ps.direction1 = new V3(-0.2, 1, -0.2); ps.direction2 = new V3(0.2, 2, 0.2); ps.gravity = new V3(0, 2, 0); ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD; ps.start();
-    braziers.push(ps);
-  }
-  for (const z of [43, 73]) { // luz quente dos braseiros iluminando paredes e chão
-    const l = new BABYLON.PointLight('brL', new V3(0.3, 3.5, z), scene); l.diffuse = new C3(1, 0.5, 0.2); l.range = 22; l.intensity = 0; brazierLights.push(l);
-  }
-  // trono ao fundo
-  const dark = mat([0.12, 0.11, 0.13], [0.03, 0.0, 0.0]), tz = HALL.z1 - 3.3;
-  const tb = (w, h, d, x, y, z) => { const b = BABYLON.MeshBuilder.CreateBox('throne', { width: w, height: h, depth: d }, scene); b.position.set(x, y, z); b.material = dark; sg.addShadowCaster(b); return b; };
-  tb(9, 0.5, 6, 0, 0.25, tz); tb(7, 0.5, 4.6, 0, 0.75, tz + 0.2);               // degraus
-  tb(3.6, 1.0, 2.6, 0, 1.5, tz + 0.6); tb(4.2, 8, 1.0, 0, 5.0, tz + 1.9);        // assento e encosto
-  tb(0.8, 2.2, 2.6, -2.2, 2.1, tz + 0.6); tb(0.8, 2.2, 2.6, 2.2, 2.1, tz + 0.6); // bracos
-  for (const x of [-1.6, 0, 1.6]) { const sp = BABYLON.MeshBuilder.CreateCylinder('spike', { diameterTop: 0, diameterBottom: 0.9, height: x === 0 ? 3.2 : 2.2, tessellation: 4 }, scene); sp.position.set(x, 9 + (x === 0 ? 1.6 : 1.1), tz + 1.9); sp.material = dark; }
-  obstacles.push({ x: 0, z: tz + 0.8, r: 2.4 }, { x: -2.2, z: tz + 0.6, r: 1.0 }, { x: 2.2, z: tz + 0.6, r: 1.0 });
-}
-// clima da arena: 'idle' | 'fight' | 'dead'
-let arenaMood = 'idle';
-function setArenaMood(m) {
-  arenaMood = m;
-  brazierLights.forEach(l => l.intensity = m === 'fight' ? 1.4 : m === 'idle' ? 0.6 : 0.15);
-  braziers.forEach(ps => {
-    ps.emitRate = m === 'fight' ? 120 : m === 'idle' ? 28 : 0;
-    ps.color1 = m === 'fight' ? new BABYLON.Color4(1, 0.25, 0.05, 1) : new BABYLON.Color4(1, 0.55, 0.15, 1);
-  });
-}
-setArenaMood('idle');
-
-function resolveWorld(p, r) {
-  for (const o of obstacles) {
-    const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), min = o.r + r;
-    if (d < min && d > 1e-4) { p.x = o.x + dx / d * min; p.z = o.z + dz / d * min; }
-  }
-  const z0 = ARENA.z - ARENA.r;
-  if (p.z > z0 - 0.4 && hallGrid) hallCollide(p, r);
-  else { p.x = clamp(p.x, -70, 70); p.z = clamp(p.z, -60, z0 + 0.5); }
-  if (!game.gateOpen && Math.abs(p.x) < 6.5 && p.z < 38) p.z = Math.min(p.z, 36.4);   // névoa fechada (só para quem vem de fora)
-}
-// colisão círculo x grade do salão: '.' é chão livre; parede, grade e fora do salão bloqueiam
-function hallBlocked(i, j) {
-  const g = hallGrid;
-  if (j < 0) return false;                                   // à frente da entrada (lado da muralha)
-  if (i < 0 || i >= g.nx || j >= g.nz) return true;
-  return g.rows[j][i] !== '.';
-}
-function hallCollide(p, r) {
-  const g = hallGrid, c = g.cell;
+function gridCollide(p, r) {
+  const g = worldGrid, c = g.cell;
   for (let it = 0; it < 2; it++) {
     const i0 = Math.floor((p.x - r - g.x0) / c), i1 = Math.floor((p.x + r - g.x0) / c);
     const j0 = Math.floor((p.z - r - g.z0) / c), j1 = Math.floor((p.z + r - g.z0) / c);
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      if (!hallBlocked(i, j)) continue;
+      if (!gridBlocked(i, j)) continue;
       const cx = g.x0 + i * c, cz = g.z0 + j * c;
       const nx = clamp(p.x, cx, cx + c), nz = clamp(p.z, cz, cz + c), dx = p.x - nx, dz = p.z - nz, d = Math.hypot(dx, dz);
       if (d < r && d > 1e-5) { p.x = nx + dx / d * r; p.z = nz + dz / d * r; }
     }
   }
 }
-
-// névoa
-const fogGate = BABYLON.MeshBuilder.CreatePlane('fog', { width: 12, height: 8 }, scene);
-fogGate.position.set(0, 4, 37.2);
-{ const m = mat([0.8, 0.85, 1], [0.5, 0.55, 0.7]); m.alpha = 0.35; m.backFaceCulling = false; fogGate.material = m; }
+function trunkAt(x, z) { // a câmera só desvia de troncos; o limite do mapa não a segura
+  const g = worldGrid; if (!g) return false;               // a câmera roda antes de a floresta carregar
+  const i = Math.floor((x - g.x0) / g.cell), j = Math.floor((z - g.z0) / g.cell);
+  return j >= 0 && j < g.nz && i >= 0 && i < g.nx && g.rows[j][i] === '#';
+}
 
 // fogueiras
 const bonfires = [];
 function makeBonfire(x, z, name) {
+  const y = groundY(x, z);
   const ash = BABYLON.MeshBuilder.CreateCylinder('ash', { diameterTop: 1.0, diameterBottom: 1.8, height: 0.4 }, scene);
-  ash.position.set(x, 0.2, z); ash.material = mat([0.1, 0.09, 0.08]);
+  ash.position.set(x, y + 0.2, z); ash.material = mat([0.1, 0.09, 0.08]);
   const blade = BABYLON.MeshBuilder.CreateBox('coil', { width: 0.08, height: 1.9, depth: 0.2 }, scene);
-  blade.position.set(x, 1.1, z); blade.rotation.z = 0.08; blade.material = mat([0.7, 0.7, 0.75], [0.15, 0.15, 0.15]);
-  const light = new BABYLON.PointLight('fl', new V3(x, 1.5, z), scene);
+  blade.position.set(x, y + 1.1, z); blade.rotation.z = 0.08; blade.material = mat([0.7, 0.7, 0.75], [0.15, 0.15, 0.15]);
+  const light = new BABYLON.PointLight('fl', new V3(x, y + 1.5, z), scene);
   light.diffuse = new C3(1, 0.55, 0.2); light.intensity = 0; light.range = 28;
   const ps = new BABYLON.ParticleSystem('fire', 250, scene);
-  ps.particleTexture = flareTex; ps.emitter = new V3(x, 0.45, z);
+  ps.particleTexture = flareTex; ps.emitter = new V3(x, y + 0.45, z);
   ps.minEmitBox = new V3(-0.25, 0, -0.25); ps.maxEmitBox = new V3(0.25, 0, 0.25);
   ps.color1 = new BABYLON.Color4(1, 0.6, 0.1, 1); ps.color2 = new BABYLON.Color4(1, 0.3, 0, 1); ps.colorDead = new BABYLON.Color4(0.3, 0, 0, 0);
   ps.minSize = 0.3; ps.maxSize = 0.75; ps.minLifeTime = 0.4; ps.maxLifeTime = 1.1; ps.emitRate = 0;
@@ -332,10 +228,94 @@ function makeBonfire(x, z, name) {
   ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD; ps.start();
   const b = { pos: new V3(x, 0, z), name, lit: false, light, ps };
   b.setLit = () => { b.lit = true; light.intensity = 1.6; ps.emitRate = 90; };
+  b.putOut = () => { b.lit = false; light.intensity = 0; ps.emitRate = 0; };
   bonfires.push(b); return b;
 }
-makeBonfire(0, 0, 'Santuário Inicial').setLit();
-makeBonfire(0, 24, 'Antes da Muralha');
+
+/* ------------------------------ navegação do monstro ------------------------------ */
+// grade de 1 m do mapa inteiro: nav = cabe o corpo do monstro; open = a visão passa
+const NAV = { x0: 0, z0: 0, nx: 0, nz: 0, nav: null, open: null, field: null, goal: -1 };
+const navIndex = (x, z) => {
+  const i = Math.floor(x - NAV.x0), j = Math.floor(z - NAV.z0);
+  return i < 0 || j < 0 || i >= NAV.nx || j >= NAV.nz ? -1 : j * NAV.nx + i;
+};
+function buildNav(r) {
+  const g = worldGrid, c = g.cell;
+  NAV.x0 = Math.floor(g.x0); NAV.z0 = Math.floor(g.z0); NAV.nx = Math.ceil(g.nx * c) + 1; NAV.nz = Math.ceil(g.nz * c) + 1;
+  const n = NAV.nx * NAV.nz;
+  NAV.nav = new Uint8Array(n); NAV.open = new Uint8Array(n); NAV.field = new Int32Array(n);
+  const free = (x, z, rr) => {
+    for (let j = Math.floor((z - rr - g.z0) / c); j <= Math.floor((z + rr - g.z0) / c); j++)
+      for (let i = Math.floor((x - rr - g.x0) / c); i <= Math.floor((x + rr - g.x0) / c); i++) {
+        if (!gridBlocked(i, j)) continue;
+        if (Math.hypot(x - clamp(x, g.x0 + i * c, g.x0 + (i + 1) * c), z - clamp(z, g.z0 + j * c, g.z0 + (j + 1) * c)) < rr) return false;
+      }
+    return true;
+  };
+  for (let j = 0, k = 0; j < NAV.nz; j++) for (let i = 0; i < NAV.nx; i++, k++) {
+    const x = NAV.x0 + i + 0.5, z = NAV.z0 + j + 0.5;
+    NAV.nav[k] = free(x, z, r) ? 1 : 0; NAV.open[k] = free(x, z, 0.05) ? 1 : 0;
+  }
+}
+function nearestNav(x, z) { // célula livre mais próxima de um ponto
+  const c = navIndex(x, z); if (c >= 0 && NAV.nav[c]) return c;
+  for (let r = 1; r < 14; r++) for (let a = 0; a < 16; a++) {
+    const k = navIndex(x + Math.sin(a / 16 * 6.283) * r, z + Math.cos(a / 16 * 6.283) * r);
+    if (k >= 0 && NAV.nav[k]) return k;
+  }
+  return -1;
+}
+function navGoal(x, z) { // recalcula o campo de distâncias (BFS) quando o destino muda de célula
+  const g = nearestNav(x, z); if (g < 0 || g === NAV.goal) return;
+  NAV.goal = g; const f = NAV.field, q = new Int32Array(NAV.nx * NAV.nz); f.fill(-1); f[g] = 0;
+  for (let h = 0, t = 1, cur = q[0] = g; h < t; cur = q[++h]) {
+    const i = cur % NAV.nx, d = f[cur] + 1;
+    if (i > 0 && NAV.nav[cur - 1] && f[cur - 1] < 0) { f[cur - 1] = d; q[t++] = cur - 1; }
+    if (i < NAV.nx - 1 && NAV.nav[cur + 1] && f[cur + 1] < 0) { f[cur + 1] = d; q[t++] = cur + 1; }
+    if (cur >= NAV.nx && NAV.nav[cur - NAV.nx] && f[cur - NAV.nx] < 0) { f[cur - NAV.nx] = d; q[t++] = cur - NAV.nx; }
+    if (cur + NAV.nx < f.length && NAV.nav[cur + NAV.nx] && f[cur + NAV.nx] < 0) { f[cur + NAV.nx] = d; q[t++] = cur + NAV.nx; }
+  }
+}
+function lineClear(ax, az, bx, bz, grid) { // amostra a reta na grade
+  const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d * 2);
+  for (let s = 1; s < n; s++) { const k = navIndex(lerp(ax, bx, s / n), lerp(az, bz, s / n)); if (k < 0 || !grid[k]) return false; }
+  return true;
+}
+const canSee = (a, b) => !NAV.open || lineClear(a.x, a.z, b.x, b.z, NAV.open);
+function navStep(pos) { // próximo ponto do caminho: desce o campo e corta caminho enquanto a reta estiver livre
+  let c = nearestNav(pos.x, pos.z); if (c < 0 || NAV.field[c] < 0) return null;
+  let best = null;
+  for (let s = 0; s < 8 && NAV.field[c] > 0; s++) {
+    const i = c % NAV.nx; let next = -1, low = NAV.field[c];
+    for (const k of [i > 0 ? c - 1 : -1, i < NAV.nx - 1 ? c + 1 : -1, c - NAV.nx, c + NAV.nx]) if (k >= 0 && k < NAV.field.length && NAV.field[k] >= 0 && NAV.field[k] < low) { low = NAV.field[k]; next = k; }
+    if (next < 0) break;
+    c = next; const x = NAV.x0 + c % NAV.nx + 0.5, z = NAV.z0 + Math.floor(c / NAV.nx) + 0.5;
+    if (best && !lineClear(pos.x, pos.z, x, z, NAV.nav)) break;
+    best = { x, z };
+  }
+  return best;
+}
+
+// pegadas que o monstro deixa: é assim que você o rastreia
+const tracks = (() => {
+  const m = mat([0, 0, 0], [1, 0.32, 0.06]); m.zOffset = -3; m.disableLighting = true; m.backFaceCulling = false;
+  return Array.from({ length: 90 }, () => {
+    const d = BABYLON.MeshBuilder.CreateDisc('track', { radius: 0.34, tessellation: 10 }, scene);
+    d.rotation.x = Math.PI / 2; d.scaling.x = 0.8; d.scaling.y = 1.4; d.material = m; d.isPickable = false; d.setEnabled(false); d.age = 1e9;
+    return d;
+  });
+})();
+let trackNext = 0, trackSide = 1;
+function dropTrack(x, z, yaw) {
+  const d = tracks[trackNext]; trackNext = (trackNext + 1) % tracks.length; trackSide = -trackSide;
+  const tx = x + Math.cos(yaw) * 0.55 * trackSide, tz = z - Math.sin(yaw) * 0.55 * trackSide;
+  d.position.set(tx, groundY(tx, tz) + 0.14, tz);
+  d.rotation.y = yaw; d.age = 0; d.setEnabled(true);
+}
+function updateTracks(dt) {
+  const life = CONFIG.hunt.trackLife;
+  for (const d of tracks) if (d.age < life) { d.age += dt; d.visibility = 0.75 * (1 - d.age / life); if (d.age >= life) d.setEnabled(false); }
+}
 
 /* ------------------------------ humanoide procedural ------------------------------ */
 function buildHumanoid(o) {
@@ -423,7 +403,7 @@ const KNIGHT = {
   // golpes: [início, fim da preparação, fim do golpe, fim da recuperação]
   clips: { vertical: [0, 30, 42, 130], sweep: [550, 572.5, 577.5, 625], diag: [650, 672.5, 677.5, 725] },
 };
-// chefe: boss.glb ("Tillagemon Boss Skeleton", Vasian-Digital3D, CC-BY-4.0) com animações próprias
+// monstro: boss.glb ("Tillagemon Boss Skeleton", Vasian-Digital3D, CC-BY-4.0) com animações próprias
 const BOSS = {
   scale: 0.25,                                  // multiplicado pelo scale do CONFIG (2.5) => 0.625 m por unidade
   walk: { clip: 'Battle_Walk', stride: 3.1 },   // stride em unidades do modelo
@@ -472,7 +452,7 @@ function gaitCycle(o, g, signedSpeed, s, dt) { // avança o ciclo de passos; vel
 function animateLimbs(h, signedSpeed, dt, o) {
   const speed = Math.abs(signedSpeed);
   o.phase = (o.phase || 0) + speed * dt * 1.5;
-  if (h.bossRig) { // chefe: parado, andando ou correndo com os clipes do modelo
+  if (h.bossRig) { // monstro: parado, andando ou correndo com os clipes do modelo
     if (o.armsBusy) return;
     const s = speed / h.root.scaling.x;
     if (speed < 0.3) { o.clock = (o.clock || 0) + dt; o.gait = null; h.pose('Battle_Stand', (o.clock / h.len('Battle_Stand')) % 1); }
@@ -493,7 +473,7 @@ function animateLimbs(h, signedSpeed, dt, o) {
     h.model.position.y = -0.9; h.model.rotation.x = o.flinch || 0;
     return;
   }
-  if (h.glb) { // chefe sem boss.glb: respira (idle) e desliza com leve inclinação
+  if (h.glb) { // monstro sem boss.glb: respira (idle) e desliza com leve inclinação
     const k = clamp(speed / 6, 0, 1);
     if (!o.armsBusy) {
       o.clock = (o.clock || 0) + dt * (1 + k * 1.6);
@@ -536,8 +516,8 @@ function armPose(h, stage, p, a) {
 
 /* ------------------------------ estado do jogo ------------------------------ */
 const game = {
-  started: false, bossFight: false, bossDefeated: false, gateOpen: false,
-  lock: null, bonfire: bonfires[0], stain: null,
+  started: false, over: false, huntTime: 0,
+  lock: null, bonfire: null, sign: null,   // sign = última pista de onde o monstro está (bússola)
 };
 const keys = {}, pressed = {};
 const cam = { yaw: 0, pitch: 0.35, dist: 6.5, cur: 6.5 };   // cur = distância real (encurta ao bater em paredes)
@@ -550,7 +530,7 @@ const P = (() => {
   return {
     h, root: h.root, pos: h.root.position, radius: 0.5,
     maxHp: CONFIG.player.maxHp, hp: CONFIG.player.maxHp, maxStamina: CONFIG.player.maxStamina, stamina: CONFIG.player.maxStamina,
-    estus: CONFIG.player.estusMax, souls: 0, level: 1, dmgMult: 1,
+    estus: CONFIG.player.estusMax, lives: CONFIG.hunt.lives, noise: 0,
     state: 'free', t: 0, staminaDelay: 0, blocking: false, buf: null, atk: null, combo: 0, flash: 0, anim: {},
     rollDir: new V3(0, 0, 1), healed: false, deadT: 0,
   };
@@ -564,33 +544,29 @@ function hurtPlayer(dmg, from) {
   const facing = Math.abs(angDiff(P.root.rotation.y, toSrc)) < 1.2;
   if (P.blocking && P.state === 'free' && facing) {
     P.stamina -= dmg * 0.9; P.staminaDelay = 1.0;
-    burst(new V3(P.pos.x, 1.3, P.pos.z), 10);
+    burst(new V3(P.pos.x, P.pos.y + 1.3, P.pos.z), 10);
     if (P.stamina > 0) { P.hp -= dmg * 0.12; sfx('block'); updateDeath(); return true; }
     P.stamina = 0; dmg *= 0.6; staggerPlayer(0.8); sfx('hurt');          // guarda quebrada
   } else { staggerPlayer(0.4); sfx('hurt'); }
   P.hp -= dmg; P.flash = 0.15;
   const away = Math.atan2(P.pos.x - from.x, P.pos.z - from.z);
   P.pos.x += Math.sin(away) * 0.4; P.pos.z += Math.cos(away) * 0.4;
-  burst(new V3(P.pos.x, 1.3, P.pos.z), 14);
+  burst(new V3(P.pos.x, P.pos.y + 1.3, P.pos.z), 14);
   updateDeath(); return true;
 }
 function staggerPlayer(d) { P.state = 'stagger'; P.t = 0; P.stagDur = d; P.atk = null; P.h.pivot.rotation.x = 0; }
 function updateDeath() { if (P.hp <= 0 && P.state !== 'dead') killPlayer(); }
 function killPlayer() {
-  P.hp = 0; P.state = 'dead'; P.deadT = 0; sfx('die'); game.lock = null;
-  if (game.stain) { game.stain.mesh.dispose(); game.stain = null; }
-  if (P.souls > 0) {
-    const m = BABYLON.MeshBuilder.CreateSphere('stain', { diameter: 0.7 }, scene);
-    m.position.set(P.pos.x, 0.8, P.pos.z); m.material = mat([1, 0.85, 0.4], [1, 0.8, 0.3]);
-    game.stain = { mesh: m, souls: P.souls }; P.souls = 0;
-  }
-  $('death').classList.add('show');
+  P.hp = 0; P.state = 'dead'; P.deadT = 0; P.lives--; sfx('die'); game.lock = null;
+  if (P.lives > 0) $('death').classList.add('show');
 }
 function respawn() {
+  if (P.lives <= 0) return endHunt(false);
   $('death').classList.remove('show');
   const b = game.bonfire;
   P.pos.set(b.pos.x + 2, 0, b.pos.z); P.root.rotation.y = 0;
-  fullRest(); resetEnemies(); P.state = 'free'; P.h.pivot.rotation.x = 0; P.h.pivot.position.y = 0.9;
+  fullRest(); P.state = 'free'; P.h.pivot.rotation.x = 0; P.h.pivot.position.y = 0.9;
+  if (monster) monster.startFlee(false);                     // satisfeito, ele recua e volta a caçar
 }
 function fullRest() { P.hp = P.maxHp; P.stamina = P.maxStamina; P.estus = CONFIG.player.estusMax; }
 
@@ -598,47 +574,47 @@ function fullRest() { P.hp = P.maxHp; P.stamina = P.maxStamina; P.estus = CONFIG
 const enemies = [];
 class Enemy {
   constructor(type, x, z) {
-    this.type = type; this.def = CONFIG.enemies[type]; this.home = new V3(x, 0, z);
-    this.h = this.def.boss && bossAsset ? buildBoss(this.def.look) : knightAsset ? buildKnight(this.def.look) : buildChessKnight(this.def.look); this.root = this.h.root; this.root.scaling.setAll(this.def.scale);
-    this.pos = this.root.position; this.radius = 0.5 * this.def.scale; this.anim = { noLocomotion: !!this.def.boss };
-    if (this.def.attacks.some(a => a.kind === 'aoe' || a.kind === 'leap')) {
-      this.ring = BABYLON.MeshBuilder.CreateDisc('ring', { radius: 1, tessellation: 48 }, scene);
-      this.ring.rotation.x = Math.PI / 2; this.ring.position.y = 0.06;
-      const rm = mat([0.8, 0.1, 0.05], [0.8, 0.1, 0.05]); rm.alpha = 0.35; rm.backFaceCulling = false; this.ring.material = rm;
-    }
-    this.reset();
-  }
-  reset() {
-    if (this.permaDead) return;
-    this.hp = this.def.hp; this.state = 'idle'; this.t = 0; this.dead = false; this.deadT = 0; this.cd = 1; this.phase = 1;
+    this.type = type; this.def = CONFIG.enemies[type];
+    this.h = bossAsset ? buildBoss(this.def.look) : knightAsset ? buildKnight(this.def.look) : buildChessKnight(this.def.look); this.root = this.h.root; this.root.scaling.setAll(this.def.scale);
+    this.pos = this.root.position; this.radius = 0.5 * this.def.scale; this.anim = { noLocomotion: true };
+    this.ring = BABYLON.MeshBuilder.CreateDisc('ring', { radius: 1, tessellation: 48 }, scene);
+    this.ring.rotation.x = Math.PI / 2; this.ring.setEnabled(false);
+    const rm = mat([0.8, 0.1, 0.05], [0.8, 0.1, 0.05]); rm.alpha = 0.35; rm.backFaceCulling = false; rm.zOffset = -4; this.ring.material = rm;
+    this.hp = this.def.hp; this.state = 'lurk'; this.t = 0; this.lurkDur = 5; this.lurkHeal = 0; this.dead = false; this.cd = 1; this.phase = 1;
     this.atk = null; this.flash = 0; this.introPose = false; this.strafe = Math.random() < 0.5 ? 1 : -1;
-    this.pos.copyFrom(this.home); this.root.rotation.y = this.def.boss ? Math.PI : rnd() * 6.28;
-    this.root.setEnabled(true); this.h.pivot.rotation.x = 0; this.h.pivot.position.y = 0.9;
-    this.h.rArm.rotation.x = 0; if (this.ring) this.ring.setEnabled(false);
+    this.aware = 0; this.lostT = 0; this.senseT = 0; this.seesP = false; this.scentT = 3; this.searchT = 0; this.roarT = 9; this.lead = null;
+    this.air = 0; this.fleeIdx = 0; this.wantFlee = false; this.lastTrack = new V3(x, 0, z); this.visible = false;
+    this.pos.set(x, 0, z); this.root.rotation.y = Math.PI;
   }
   get spd() { return this.def.speed * (this.phase === 2 ? 1.25 : 1); }
   damage(amount, heavy) {
     if (this.dead) return;
+    // emboscada: ele ainda não tinha notado você
+    const unaware = this.state === 'hunt' || this.state === 'search' || this.state === 'lurk' || this.state === 'roar';
+    if (unaware) { amount *= CONFIG.hunt.ambushMult; showMsg('EMBOSCADA!', 'gold', 1500); }
     this.hp -= amount; this.flash = 0.12; sfx('hit');
-    burst(new V3(this.pos.x, 1.4 * this.def.scale, this.pos.z), 16);
-    if (this.state === 'idle') this.state = 'chase';
-    if (this.def.boss) {
-      if (this.phase === 1 && this.hp > 0 && this.hp < this.def.hp / 2) { this.phase = 2; showMsg('O GUARDIÃO ENFURECE', 'red', 2200); }
-    } else if (this.state !== 'active' && (heavy || this.state === 'windup' || Math.random() < 0.35)) {
-      this.state = 'stagger'; this.t = 0; this.stagDur = heavy ? 0.9 : 0.45; this.atk = null;
-      this.h.rArm.rotation.x = 0; this.hideRing();
-      const a = Math.atan2(this.pos.x - P.pos.x, this.pos.z - P.pos.z);
-      this.pos.x += Math.sin(a) * 0.6; this.pos.z += Math.cos(a) * 0.6;
-    }
-    if (this.hp <= 0) this.die();
+    burst(new V3(this.pos.x, this.pos.y + 1.4 * this.def.scale, this.pos.z), 16);
+    if (this.fleeIdx < CONFIG.hunt.fleeAt.length && this.hp > 0 && this.hp < this.def.hp * CONFIG.hunt.fleeAt[this.fleeIdx]) { this.fleeIdx++; this.wantFlee = true; }
+    if (this.hp <= 0) return this.die();
+    if (unaware) { this.spot(); this.state = 'stagger'; this.t = 0; this.stagDur = heavy ? 1.6 : 1.1; }
   }
-  die() {
-    this.dead = true; this.deadT = 0; this.hideRing(); P.souls += this.def.souls;
-    if (game.lock === this) game.lock = null;
-    if (this.def.boss) bossDefeated();
-  }
-  hideRing() { if (this.ring) this.ring.setEnabled(false); }
+  die() { this.dead = true; this.air = 0; this.pos.y = groundY(this.pos.x, this.pos.z); this.hideRing(); if (game.lock === this) game.lock = null; monsterDefeated(); }
+  hideRing() { this.ring.setEnabled(false); }
   startAttack(a) { this.atk = a; this.state = 'windup'; this.t = 0; this.windDur = a.windup * (this.phase === 2 ? 0.8 : 1); }
+  spot() { this.aware = 1; this.lostT = 0; this.lead = P.pos.clone(); }
+  startFlee(enrage) {
+    const H = CONFIG.hunt; let far = null, fd = -1;
+    for (const [x, z] of DENS) { const d = Math.hypot(x - P.pos.x, z - P.pos.z); if (d > fd) { fd = d; far = [x, z]; } }
+    this.flee = { x: far[0], z: far[1] }; this.state = 'flee'; this.t = 0; this.aware = 0; this.atk = null; this.hideRing();
+    this.lurkHeal = enrage ? H.lurkHeal * this.def.hp / H.lurkTime : 0; this.lurkDur = enrage ? H.lurkTime : 3;
+    if (enrage) { this.phase = 2; this.roar(); showMsg('ELE FOGE — SIGA AS PEGADAS', 'red', 2800); }
+  }
+  roar() { // é assim que ele denuncia onde está: a bússola aponta para o rugido
+    const d = Math.hypot(this.pos.x - P.pos.x, this.pos.z - P.pos.z);
+    sfx('roar', clamp(1.3 - d / 90, 0.25, 1)); shake = Math.max(shake, clamp(0.5 - d / 60, 0, 0.5));
+    game.sign = { x: this.pos.x, z: this.pos.z, t: 0 };
+    const [a, b] = CONFIG.hunt.roarEvery; this.roarT = a + Math.random() * (b - a);
+  }
   strike() {
     const a = this.atk, f = this.root.rotation.y, dx = P.pos.x - this.pos.x, dz = P.pos.z - this.pos.z, d = Math.hypot(dx, dz);
     if (a.kind === 'melee') {
@@ -646,56 +622,108 @@ class Enemy {
       if (d < a.range + 0.4 && inArc) hurtPlayer(a.dmg, this.pos);
     } else {
       const c = a.kind === 'aoe' ? new V3(this.pos.x + Math.sin(f) * a.reach, 0, this.pos.z + Math.cos(f) * a.reach) : this.pos;
-      burst(new V3(c.x, 0.3, c.z), 60); sfx('slam'); shake = Math.max(shake, a.kind === 'leap' ? 0.7 : 0.5);
+      burst(new V3(c.x, groundY(c.x, c.z) + 0.3, c.z), 60); sfx('slam'); shake = Math.max(shake, a.kind === 'leap' ? 0.7 : 0.5);
       if (Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < a.radius) hurtPlayer(a.dmg, c);
     }
   }
+  // sentidos, 5x por segundo: visão (cone + linha livre) e audição
+  sense(dist, want) {
+    const H = CONFIG.hunt; this.senseT = 0.2;
+    const los = canSee(this.pos, P.pos);
+    this.visible = los && dist < H.sight + 6;
+    this.seesP = los && dist < H.sight && (dist < 5 || Math.abs(angDiff(this.root.rotation.y, want)) < H.sightArc * Math.PI / 180);
+    if (this.state === 'flee') return;
+    if (this.seesP) this.aware = Math.min(1, this.aware + 0.2 * (dist < 12 ? 3 : 1.2));
+    else if (this.state !== 'chase') this.aware = Math.max(0, this.aware - 0.2 * 0.25);
+    if (P.noise >= dist) this.lead = P.pos.clone();           // ouviu: sabe exatamente de onde veio
+  }
+  moveToward(x, z, speed, dt) {
+    navGoal(x, z);
+    const step = navStep(this.pos), tx = step ? step.x : x, tz = step ? step.z : z;
+    this.root.rotation.y = turnToward(this.root.rotation.y, Math.atan2(tx - this.pos.x, tz - this.pos.z), 4.5 * dt);
+    const f = this.root.rotation.y;
+    this.pos.x += Math.sin(f) * speed * dt; this.pos.z += Math.cos(f) * speed * dt;
+    return speed;
+  }
   update(dt) {
-    if (this.dead) {
-      if (this.def.boss) return;
-      this.deadT += dt; const k = clamp(this.deadT * 3, 0, 1);
-      this.h.pivot.rotation.x = lerp(0, 1.5, k); this.h.pivot.position.y = lerp(0.9, 0.25, k);
-      if (this.deadT > 3) { this.root.setEnabled(false); if (this.def.boss) this.permaDead = true; }
-      return;
-    }
+    if (this.dead) return;
+    const H = CONFIG.hunt;
     if (this.flash > 0) this.flash -= dt;
     setEmissive(this.h.mats, this.flash > 0 ? FLASH : this.phase === 2 ? RAGE : BLACK);
     const dx = P.pos.x - this.pos.x, dz = P.pos.z - this.pos.z, dist = Math.hypot(dx, dz), want = Math.atan2(dx, dz);
     const alive = P.state !== 'dead';
+    if ((this.senseT -= dt) <= 0 && alive) this.sense(dist, want);
     let moveSpeed = 0;
     if (this.cd > 0) this.cd -= dt;
+    if (alive && (this.state === 'hunt' || this.state === 'search')) { // nunca para de procurar: de tempos em tempos fareja e ruge
+      this.searchT += dt;
+      if ((this.scentT -= dt) <= 0) {
+        this.scentT = H.scentEvery * (this.phase === 2 ? 0.7 : 1);
+        const err = lerp(H.scentErr[0], H.scentErr[1], clamp(this.searchT / 45, 0, 1)), a = Math.random() * 6.283;
+        this.lead = new V3(P.pos.x + Math.sin(a) * err, 0, P.pos.z + Math.cos(a) * err);
+        if (this.state === 'search') { this.state = 'hunt'; this.t = 0; }
+      }
+      if (this.aware >= 1) { this.state = 'chase'; this.spot(); this.searchT = 0; game.sign = { x: this.pos.x, z: this.pos.z, t: 0 }; showMsg('ELE TE VIU', 'red', 1500); sfx('roar', 0.7); }
+      else if ((this.roarT -= dt) <= 0) { this.roar(); this.state = 'roar'; this.t = 0; }
+    }
     switch (this.state) {
-      case 'idle':
-        if (alive && (this.def.boss ? game.bossFight : dist < this.def.aggro)) this.state = 'chase';
+      case 'hunt': { // vai até a última pista; mais rápido se ouviu você de verdade
+        if (!alive) break;
+        if (!this.lead) { this.state = 'search'; break; }
+        if (Math.hypot(this.lead.x - this.pos.x, this.lead.z - this.pos.z) < 3.5) { this.state = 'search'; this.scentT = Math.min(this.scentT, 3); this.lead = null; break; }
+        moveSpeed = this.moveToward(this.lead.x, this.lead.z, P.noise >= dist ? this.def.alertSpeed : this.def.huntSpeed, dt);
         break;
+      }
+      case 'search': // cheira o chão e olha em volta
+        this.root.rotation.y += Math.sin(this.searchT * 1.6) * 1.1 * dt;
+        break;
+      case 'roar':
+        this.t += dt; if (this.t >= 1.6) this.state = 'hunt';
+        break;
+      case 'lurk': // escondido, recuperando vida
+        this.t += dt; this.hp = Math.min(this.def.hp, this.hp + this.lurkHeal * dt);
+        if (this.t >= this.lurkDur || (this.seesP && dist < 12)) { this.state = 'hunt'; this.t = 0; this.scentT = Math.min(this.scentT, 1); this.searchT = 0; }
+        break;
+      case 'flee': {
+        this.t += dt;
+        if (Math.hypot(this.flee.x - this.pos.x, this.flee.z - this.pos.z) < 3 || this.t > 22) { this.state = 'lurk'; this.t = 0; break; }
+        moveSpeed = this.moveToward(this.flee.x, this.flee.z, this.def.fleeSpeed, dt);
+        break;
+      }
       case 'chase': {
-        if (!alive) { this.state = 'idle'; break; }
-        this.root.rotation.y = turnToward(this.root.rotation.y, want, 4.5 * dt);
-        const f = this.root.rotation.y;
+        if (!alive) { this.state = 'hunt'; this.lead = null; break; }
+        if (this.wantFlee) { this.wantFlee = false; this.startFlee(true); break; }
+        // perdeu você de vista por tempo demais: volta a procurar a partir de onde te viu
+        if (this.seesP || P.noise >= dist || dist < 8) { this.lostT = 0; this.lead = P.pos.clone(); }
+        else if ((this.lostT += dt) > 4) { this.state = 'hunt'; this.aware = 0; this.scentT = H.scentEvery * 0.5; this.searchT = 0; break; }
         if (this.cd <= 0) {
-          const opts = this.def.attacks.filter(a => dist >= (a.minD || 0) && dist <= (a.maxD || a.range + 0.5));
+          const los = canSee(this.pos, P.pos);
+          const opts = this.def.attacks.filter(a => dist >= (a.minD || 0) && dist <= (a.maxD || a.range + 0.5) && (a.kind !== 'leap' || los));
           if (opts.length) { this.startAttack(opts[Math.floor(Math.random() * opts.length)]); break; }
         }
-        if (dist > this.def.stopDist) { moveSpeed = this.spd; }
-        else if (dist < this.def.stopDist - 0.6) { moveSpeed = -this.spd * 0.5; }
-        else { // circula esperando a recarga
-          this.pos.x += Math.cos(f) * this.strafe * this.spd * 0.35 * dt; this.pos.z -= Math.sin(f) * this.strafe * this.spd * 0.35 * dt; moveSpeed = this.spd * 0.35;
+        if (dist > this.def.stopDist) moveSpeed = this.moveToward(this.lead.x, this.lead.z, this.spd, dt);
+        else {
+          this.root.rotation.y = turnToward(this.root.rotation.y, want, 4.5 * dt);
+          const f = this.root.rotation.y;
+          if (dist < this.def.stopDist - 0.6) moveSpeed = -this.spd * 0.5;
+          else { // circula esperando a recarga
+            this.pos.x += Math.cos(f) * this.strafe * this.spd * 0.35 * dt; this.pos.z -= Math.sin(f) * this.strafe * this.spd * 0.35 * dt; moveSpeed = this.spd * 0.35;
+          }
+          this.pos.x += Math.sin(f) * moveSpeed * dt; this.pos.z += Math.cos(f) * moveSpeed * dt;
         }
-        this.pos.x += Math.sin(f) * moveSpeed * dt; this.pos.z += Math.cos(f) * moveSpeed * dt;
         break;
       }
       case 'windup': {
         this.t += dt; const p = clamp(this.t / this.windDur, 0, 1), a = this.atk;
-        if (this.t < this.windDur * 0.6) this.root.rotation.y = turnToward(this.root.rotation.y, want, (this.def.boss ? 3 : 2.2) * dt);
+        if (this.t < this.windDur * 0.6) this.root.rotation.y = turnToward(this.root.rotation.y, want, 3 * dt);
         armPose(this.h, 'windup', p, a);
-        if (this.ring) {
-          const f = this.root.rotation.y;
-          if (a.kind === 'aoe') { this.ring.setEnabled(true); this.ring.scaling.setAll(a.radius); this.ring.position.x = this.pos.x + Math.sin(f) * a.reach; this.ring.position.z = this.pos.z + Math.cos(f) * a.reach; }
-          else if (a.kind === 'leap') { this.ring.setEnabled(true); this.ring.scaling.setAll(a.radius); this.ring.position.x = P.pos.x; this.ring.position.z = P.pos.z; }
-        }
+        const f = this.root.rotation.y;
+        if (a.kind === 'aoe') { this.ring.setEnabled(true); this.ring.scaling.setAll(a.radius); this.ring.position.x = this.pos.x + Math.sin(f) * a.reach; this.ring.position.z = this.pos.z + Math.cos(f) * a.reach; this.ring.position.y = groundY(this.ring.position.x, this.ring.position.z) + 0.2; }
+        else if (a.kind === 'leap') { this.ring.setEnabled(true); this.ring.scaling.setAll(a.radius); this.ring.position.x = P.pos.x; this.ring.position.z = P.pos.z; this.ring.position.y = P.pos.y + 0.2; }
         if (this.t >= this.windDur) {
           this.state = 'active'; this.t = 0;
-          if (a.kind === 'leap') { this.leapFrom = this.pos.clone(); const d = Math.max(dist - 1.5, 0); this.leapTo = new V3(this.pos.x + Math.sin(want) * d, 0, this.pos.z + Math.cos(want) * d); this.root.rotation.y = want; }
+          if (a.kind === 'leap') { this.leapFrom = this.pos.clone(); const d = Math.max(dist - 1.5, 0); this.leapTo = new V3(this.pos.x + Math.sin(want) * d, 0, this.pos.z + Math.cos(want) * d); this.root.rotation.y = want;
+            const k = nearestNav(this.leapTo.x, this.leapTo.z); if (k >= 0) this.leapTo.set(NAV.x0 + k % NAV.nx + 0.5, 0, NAV.z0 + Math.floor(k / NAV.nx) + 0.5); } // pousa fora dos troncos
           else this.strike();
         }
         break;
@@ -705,10 +733,10 @@ class Enemy {
         armPose(this.h, 'active', p, a);
         if (a.kind === 'leap') {
           this.pos.x = lerp(this.leapFrom.x, this.leapTo.x, p); this.pos.z = lerp(this.leapFrom.z, this.leapTo.z, p);
-          this.pos.y = Math.sin(p * Math.PI) * 4;
+          this.air = Math.sin(p * Math.PI) * 4;
         }
         if (this.t >= a.active) {
-          if (a.kind === 'leap') { this.pos.y = 0; this.strike(); }
+          if (a.kind === 'leap') { this.air = 0; this.strike(); }
           this.hideRing(); this.state = 'recover'; this.t = 0;
         }
         break;
@@ -716,50 +744,58 @@ class Enemy {
       case 'recover': {
         this.t += dt; const a = this.atk, r = a.recover * (this.phase === 2 ? 0.75 : 1);
         armPose(this.h, 'recover', clamp(this.t / r, 0, 1), a);
-        if (this.t >= r) { this.state = 'chase'; this.cd = (0.3 + Math.random() * 0.7) * (this.phase === 2 ? 0.6 : 1); this.strafe = Math.random() < 0.5 ? 1 : -1; }
+        if (this.t >= r) { this.state = 'chase'; this.lead = P.pos.clone(); this.cd = (0.3 + Math.random() * 0.7) * (this.phase === 2 ? 0.6 : 1); this.strafe = Math.random() < 0.5 ? 1 : -1; }
         break;
       }
       case 'stagger':
-        this.t += dt; if (this.t >= this.stagDur) { this.state = 'chase'; this.cd = 0.4; }
+        this.t += dt; if (this.t >= this.stagDur) { this.state = 'chase'; this.lead = P.pos.clone(); this.cd = 0.4; }
         break;
     }
     // separação do jogador e colisão com o mundo
     const ddx = this.pos.x - P.pos.x, ddz = this.pos.z - P.pos.z, dd = Math.hypot(ddx, ddz), minD = this.radius + P.radius;
     if (dd < minD && dd > 1e-4 && this.state !== 'active') { this.pos.x = P.pos.x + ddx / dd * minD; this.pos.z = P.pos.z + ddz / dd * minD; }
     resolveWorld(this.pos, this.radius);
+    this.pos.y = groundY(this.pos.x, this.pos.z) + this.air;
+    // pegadas e passos pesados: os dois denunciam o monstro
+    if (this.air === 0 && Math.hypot(this.pos.x - this.lastTrack.x, this.pos.z - this.lastTrack.z) > 2) {
+      this.lastTrack.copyFrom(this.pos); dropTrack(this.pos.x, this.pos.z, this.root.rotation.y);
+      sfx('step', clamp(1 - dist / 45, 0, 1)); if (dist < 30) shake = Math.max(shake, 0.05 * (1 - dist / 30));
+    }
     this.anim.flinch = this.state === 'stagger' ? -0.3 * Math.sin(Math.PI * clamp(this.t / this.stagDur, 0, 1)) : 0;
     this.anim.armsBusy = this.introPose || this.state === 'windup' || this.state === 'active' || this.state === 'recover';
     animateLimbs(this.h, moveSpeed, dt, this.anim);
   }
 }
-const SPAWNS = [
-  ['hollow', 8, 10], ['hollow', -9, 12], ['hollow', 16, 5], ['hollow', -17, 6], ['hollow', 10, 18], ['hollow', -12, 20],
-  ['knight', 14, 29], ['knight', -14, 29], ['boss', 0, 66],
-];
-let boss = null;
-// salão do castelo ("Complete Medieval Tiled Castle Interior", Teranox, CC-BY-4.0)
-async function loadHall() {
-  const [hall, grid] = await Promise.all([
-    BABYLON.SceneLoader.LoadAssetContainerAsync('assets/', 'castle_hall.glb', scene),
-    fetch('assets/castle_hall_grid.json').then(r => r.json()),
+// tocas para onde o monstro foge, longe do jogador
+const DENS = [[-17, -42], [18, -42], [-17, 42], [12, 42], [0, 48]];
+let monster = null;
+// floresta morta ("Forrest", kampsolutions, CC-BY-4.0)
+async function loadForest() {
+  const [forest, grid] = await Promise.all([
+    BABYLON.SceneLoader.LoadAssetContainerAsync('assets/', 'forest.glb', scene),
+    fetch('assets/forest_grid.json').then(r => r.json()),
   ]);
-  hall.addAllToScene();
-  hall.rootNodes.forEach(n => n.position.y = 0.02);          // piso do salão logo acima do chão externo
-  hall.meshes.forEach(m => {
+  forest.addAllToScene();
+  forest.meshes.forEach(m => {
     if (!m.getTotalVertices()) return;
-    m.isPickable = false; m.freezeWorldMatrix(); m.receiveShadows = true; sg.addShadowCaster(m);
-    if (m.material) m.material.maxSimultaneousLights = 8;
-    if (!/Bars/.test(m.name)) hallWalls.push(m);              // grades são vazadas: a câmera passa por elas
+    m.isPickable = false; m.freezeWorldMatrix(); m.receiveShadows = true;
+    if (m.material) { m.material.maxSimultaneousLights = 8; m.material.backFaceCulling = false; }   // o escaneamento é uma casca sem espessura
   });
-  hallGrid = grid;
+  worldGrid = grid;
+  addFarTrees();
+  makeBonfire(0, -46, 'Clareira do Sul').setLit();
+  makeBonfire(-14, 4, 'Tronco Caído').setLit();
+  makeBonfire(15, 22, 'Fogueira do Norte').setLit();
+  game.bonfire = bonfires[0];
+  P.pos.set(2, groundY(2, -46), -46);
 }
 async function loadAssets() {
   try { knightAsset = await BABYLON.SceneLoader.LoadAssetContainerAsync('assets/', 'knight.glb', scene); }
   catch (err) { console.warn('knight.glb não carregou, usando o cavalo procedural', err); }
-  try { await loadHall(); }
-  catch (err) { console.warn('castle_hall.glb não carregou', err); }
+  try { await loadForest(); }
+  catch (err) { console.error('a floresta não carregou', err); $('goText').textContent = 'ERRO AO CARREGAR A FLORESTA'; return; }
   try { bossAsset = await BABYLON.SceneLoader.LoadAssetContainerAsync('assets/', 'boss.glb', scene); }
-  catch (err) { console.warn('boss.glb não carregou, o chefe usa o modelo do cavaleiro', err); }
+  catch (err) { console.warn('boss.glb não carregou, o monstro usa o modelo do cavaleiro', err); }
   if (knightAsset) { // jogador também vira cavaleiro (azul)
     const old = P.root, k = buildKnight({ tint: [0.45, 0.6, 1.0] });
     k.shield = new BABYLON.TransformNode('shield', scene);
@@ -767,18 +803,14 @@ async function loadAssets() {
     old.getChildMeshes().forEach(m => m.dispose()); old.dispose();
     P.h = k; P.root = k.root; P.pos = k.root.position;
   }
-  SPAWNS.forEach(([t, x, z]) => enemies.push(new Enemy(t, x, z)));
-  boss = enemies.find(e => e.def.boss);
+  monster = new Enemy('boss', 0, 48); enemies.push(monster);
+  buildNav(monster.radius);
   game.ready = true; $('goText').textContent = 'CLIQUE PARA COMEÇAR';
 }
-function resetEnemies() {
-  enemies.forEach(e => e.reset()); game.bossFight = false; if (!game.bossDefeated) setArenaMood('idle'); $('boss').style.display = 'none';
-}
-function bossDefeated() { // chamado quando o chefe morre: inicia a cutscene
-  game.bossDefeated = true;
-  const B = boss.pos.clone();
+function monsterDefeated() { // chamado quando o monstro morre: inicia a cutscene de vitória
+  const B = monster.pos.clone();
   const emb = new BABYLON.ParticleSystem('souls', 700, scene);
-  emb.particleTexture = flareTex; emb.emitter = new V3(B.x, 0.3, B.z);
+  emb.particleTexture = flareTex; emb.emitter = new V3(B.x, B.y + 0.3, B.z);
   emb.minEmitBox = new V3(-1.6, 0, -1.6); emb.maxEmitBox = new V3(1.6, 3.5, 1.6);
   emb.color1 = new BABYLON.Color4(1, 0.85, 0.4, 1); emb.color2 = new BABYLON.Color4(1, 0.4, 0.1, 1); emb.colorDead = new BABYLON.Color4(0.4, 0.1, 0, 0);
   emb.minSize = 0.08; emb.maxSize = 0.28; emb.minLifeTime = 2; emb.maxLifeTime = 4; emb.emitRate = 0;
@@ -789,47 +821,49 @@ function bossDefeated() { // chamado quando o chefe morre: inicia a cutscene
     a0: Math.atan2(P.pos.x - B.x, P.pos.z - B.z), startPos: camera.position.clone(), startTgt: camera.getTarget().clone(),
   };
   P.state = 'free'; P.atk = null; P.buf = null; P.blocking = false; game.lock = null;
-  boss.introPose = true;
-  if (boss.h.bossRig) boss.h.pose('Damage_Die', 0);
-  else { if (boss.h.anim) boss.h.anim.goToFrame(42); boss.h.model.rotation.x = 0.12; }
-  setEmissive(boss.h.mats, FLASH); sfx('hit'); shake = 0.7;
+  monster.introPose = true;
+  if (monster.h.bossRig) monster.h.pose('Damage_Die', 0);
+  else { if (monster.h.anim) monster.h.anim.goToFrame(42); monster.h.model.rotation.x = 0.12; }
+  setEmissive(monster.h.mats, FLASH); sfx('hit'); shake = 0.7;
   $('boss').style.display = 'none';
-  $('title').firstElementChild.textContent = 'INIMIGO ABATIDO'; $('title').lastElementChild.textContent = '+' + boss.def.souls + ' almas';
+  $('title').firstElementChild.textContent = 'MONSTRO ABATIDO'; $('title').lastElementChild.textContent = 'a caçada terminou';
   document.body.classList.add('cinematic');
 }
 function updateDeathCut(dt) {
-  const c = game.cut; c.t += dt; const t = c.t, B = c.B, h = boss.h;
-  if ((t > 1.0 && (pressed.Space || pressed.Enter || pressed.KeyE || pressed.M0)) || t >= 9) return endDeathCut();
+  const c = game.cut; c.t += dt; const t = c.t, B = c.B, h = monster.h;
+  if ((t > 1.0 && (pressed.Space || pressed.Enter || pressed.KeyE || pressed.M0)) || t >= 7.5) return endDeathCut();
   const sm = x => x * x * (3 - 2 * x);
   const kneel = sm(clamp((t - 0.35) / 2.2, 0, 1)), fall = Math.pow(clamp((t - 3.0) / 1.0, 0, 1), 2);
   if (h.bossRig) h.pose('Damage_Die', (t - 0.35) / 3.55);           // desaba e toca o chão em t = 3.9
   else { h.pivot.rotation.x = lerp(0, 0.35, kneel) + 1.15 * fall; h.pivot.position.y = 0.9 - 0.3 * kneel - 0.35 * fall; }
   if (t >= 0.35 && c.flashed) { c.flashed = false; setEmissive(h.mats, BLACK); }
-  if (t >= 3.9 && !c.impact) { c.impact = true; burst(new V3(B.x, 0.4, B.z), 100); sfx('slam'); shake = Math.max(shake, 0.6); }
-  if (t >= 4.0 && !c.ember) { c.ember = true; c.emb.emitRate = 260; setArenaMood('dead'); }
+  if (t >= 3.9 && !c.impact) { c.impact = true; burst(new V3(B.x, B.y + 0.4, B.z), 100); sfx('slam'); shake = Math.max(shake, 0.6); }
+  if (t >= 4.0 && !c.ember) { c.ember = true; c.emb.emitRate = 260; }
   if (t >= 6.0) c.emb.emitRate = 0;
   if (t >= 4.2) { const v = clamp(1 - (t - 4.2) / 1.8, 0, 1); h.root.getChildMeshes().forEach(m => m.visibility = v); }
   if (t >= 5.0) $('title').classList.add('show');
   // camera: orbita lenta ao redor do chefe e depois plano geral
   const tt = Math.min(t, 6), ang = c.a0 + 0.35 * Math.max(tt - 0.35, 0), r = lerp(9, 6.5, tt / 6), y = lerp(1.8, 3.5, tt / 6);
-  let pos = new V3(B.x + Math.sin(ang) * r, y, B.z + Math.cos(ang) * r);
-  let tgt = new V3(B.x, lerp(2.4, 1.0, kneel * 0.5 + fall * 0.5), B.z);
+  let pos = new V3(B.x + Math.sin(ang) * r, B.y + y, B.z + Math.cos(ang) * r);
+  let tgt = new V3(B.x, B.y + lerp(2.4, 1.0, kneel * 0.5 + fall * 0.5), B.z);
   if (t < 1.2) { const k = sm(t / 1.2); pos = V3.Lerp(c.startPos, pos, k); tgt = V3.Lerp(c.startTgt, tgt, k); }
-  if (t > 6.0) {
-    const k = sm(clamp((t - 6.0) / 2.5, 0, 1));
-    pos = V3.Lerp(pos, new V3(ARENA.x, 16, ARENA.z - 22), k); tgt = V3.Lerp(tgt, new V3(ARENA.x, 1, ARENA.z), k);
-  }
   if (shake > 0) { pos.x += (Math.random() - 0.5) * shake; pos.y += (Math.random() - 0.5) * shake; shake = Math.max(0, shake - dt * 1.2); }
   camera.position.copyFrom(pos); camera.setTarget(tgt);
 }
 function endDeathCut() {
-  const c = game.cut; game.cut = null; c.emb.emitRate = 0; setTimeout(() => c.emb.dispose(), 5000);
-  boss.root.setEnabled(false); boss.permaDead = true; boss.introPose = false;
-  game.bossFight = false; fogGate.setEnabled(false); setArenaMood('dead');
-  const b = makeBonfire(ARENA.x, ARENA.z, 'Arena do Guardião'); b.setLit();
-  cam.yaw = Math.atan2(ARENA.x - P.pos.x, ARENA.z - P.pos.z); cam.pitch = 0.35; cam.dist = 6.5;
+  const c = game.cut; game.cut = null; c.emb.emitRate = 0;
+  monster.root.setEnabled(false); monster.introPose = false;
   document.body.classList.remove('cinematic'); $('title').classList.remove('show');
-  sfx('bonfire'); setTimeout(() => showMsg('FOGUEIRA ACESA', 'gold', 2800), 500);
+  endHunt(true);
+}
+function endHunt(won) { // fim da caçada: quem caçou quem
+  game.over = true; game.lock = null; $('death').classList.remove('show');
+  try { document.exitPointerLock(); } catch (_) { }
+  const t = Math.floor(game.huntTime), time = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  $('endT').textContent = won ? 'VOCÊ CAÇOU O MONSTRO' : 'O MONSTRO CAÇOU VOCÊ';
+  $('endS').textContent = won ? 'Caçada concluída em ' + time : 'A vida dele ficou em ' + Math.ceil(monster.hp / monster.def.hp * 100) + '%  ·  ' + time + ' de caçada';
+  $('end').className = 'show ' + (won ? 'won' : 'lost');
+  sfx(won ? 'bonfire' : 'die');
 }
 
 /* ------------------------------ HUD ------------------------------ */
@@ -842,12 +876,25 @@ function updateHud() {
   $('hp').style.width = P.maxHp * 3 + 'px'; $('st').style.width = P.maxStamina * 2.6 + 'px';
   $('hp').firstElementChild.style.width = clamp(P.hp / P.maxHp, 0, 1) * 100 + '%';
   $('st').firstElementChild.style.width = clamp(P.stamina / P.maxStamina, 0, 1) * 100 + '%';
-  $('estus').textContent = '⚱ Estus ' + P.estus + '/' + CONFIG.player.estusMax + '   ·   Nível ' + P.level;
-  $('soulsN').textContent = Math.floor(P.souls);
-  if (game.bossFight && boss && !boss.dead) {
-    $('boss').style.display = 'block'; $('boss').firstElementChild.textContent = boss.def.name;
-    $('boss').querySelector('i').style.width = clamp(boss.hp / boss.def.hp, 0, 1) * 100 + '%';
+  $('estus').textContent = '⚱ Estus ' + P.estus + '/' + CONFIG.player.estusMax;
+  $('livesN').textContent = '♥'.repeat(Math.max(P.lives, 0));
+  const m = monster, live = m && !m.dead && game.started && !game.over;
+  // barra de vida só quando ele está à vista
+  $('boss').style.display = live && m.visible ? 'block' : 'none';
+  if (live) {
+    $('boss').firstElementChild.textContent = m.def.name;
+    $('boss').querySelector('i').style.width = clamp(m.hp / m.def.hp, 0, 1) * 100 + '%';
+    const chased = m.state === 'chase' || m.state === 'windup' || m.state === 'active' || m.state === 'recover' || m.state === 'stagger';
+    const status = chased ? 'ELE ESTÁ TE CAÇANDO' : m.state === 'flee' ? 'ELE ESTÁ FUGINDO' : m.state === 'lurk' ? 'ELE ESTÁ ESCONDIDO' : m.aware > 0.25 ? 'ELE DESCONFIA DE VOCÊ' : 'ELE TE PROCURA';
+    $('status').textContent = status; $('status').className = chased ? 'danger' : m.state === 'flee' || m.state === 'lurk' ? 'prey' : '';
   }
+  // bússola: aponta para o último rugido ou avistamento
+  const sign = game.sign, mk = $('mark'), SIGN_LIFE = 40;
+  if (live && sign && sign.t < SIGN_LIFE) {
+    const d = angDiff(cam.yaw, Math.atan2(sign.x - P.pos.x, sign.z - P.pos.z));
+    mk.style.left = (50 + d / Math.PI * 50) + '%'; mk.style.opacity = 1 - sign.t / SIGN_LIFE;
+    $('signD').textContent = 'rugido a ~' + Math.round(Math.hypot(sign.x - P.pos.x, sign.z - P.pos.z) / 5) * 5 + ' m';
+  } else { mk.style.opacity = 0; $('signD').textContent = 'sem pista: procure pegadas'; }
   const lk = $('lock');
   if (game.lock) {
     const w = engine.getRenderWidth(), h = engine.getRenderHeight();
@@ -884,7 +931,7 @@ function playerStrike() {
   for (const e of enemies) {
     if (e.dead || !e.root.isEnabled()) continue;
     const dx = e.pos.x - P.pos.x, dz = e.pos.z - P.pos.z, d = Math.hypot(dx, dz);
-    if (d < a.range + e.radius && Math.abs(angDiff(f, Math.atan2(dx, dz))) < a.arc) e.damage(a.dmg * P.dmgMult, a.heavy);
+    if (d < a.range + e.radius && Math.abs(angDiff(f, Math.atan2(dx, dz))) < a.arc) e.damage(a.dmg, a.heavy);
   }
 }
 function tryAction(act, mv) {
@@ -973,10 +1020,11 @@ function updatePlayer(dt) {
   P.anim.armsBusy = P.h.glb ? P.state === 'attack' || P.state === 'roll' : armsBusy;
   P.anim.flinch = P.blocking ? 0.12 : 0;
   animateLimbs(P.h, speed, dt, P.anim);
-  if (P.state !== 'dead') {
-    resolveWorld(P.pos, P.radius);
-    if (game.bossFight) P.pos.z = Math.max(P.pos.z, ARENA.z - ARENA.r + 1.5);
-  }
+  if (P.state !== 'dead') resolveWorld(P.pos, P.radius);
+  P.pos.y = groundY(P.pos.x, P.pos.z);
+  // barulho que o monstro pode ouvir (defendendo ou bebendo você se move em silêncio)
+  const N = CONFIG.hunt.noise;
+  P.noise = P.state === 'attack' || P.state === 'stagger' ? N.fight : P.state === 'roll' ? N.roll : speed > 5 ? N.sprint : speed > 3 ? N.walk : 0;
 }
 
 /* ------------------------------ interações / mundo ------------------------------ */
@@ -984,44 +1032,21 @@ function updateWorld(dt, time) {
   let prompt = '';
   if (P.state === 'free') {
     for (const b of bonfires) {
-      if (Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z) < 3) {
-        const cost = CONFIG.levelUp.baseCost + P.level * CONFIG.levelUp.costPerLevel;
-        prompt = b.lit ? `[E] Descansar — ${b.name}<br>[L] Subir de nível (${cost} almas)` : '[E] Acender a fogueira';
-        if (pressed.KeyE) {
-          if (!b.lit) { b.setLit(); showMsg('FOGUEIRA ACESA', 'gold', 2800); }
-          else showMsg('DESCANSANDO', 'gold', 1500);
-          sfx('bonfire'); game.bonfire = b; fullRest(); resetEnemies();
-        }
-        if (pressed.KeyL && b.lit) {
-          if (P.souls >= cost) {
-            P.souls -= cost; P.level++; P.maxHp += CONFIG.levelUp.hpPerLevel; P.dmgMult += CONFIG.levelUp.dmgPerLevel; P.hp = P.maxHp; sfx('estus');
-            showMsg('NÍVEL ' + P.level, 'gold', 1800);
-          } else showMsg('ALMAS INSUFICIENTES', 'red', 1500);
-        }
-        break;
+      if (!b.lit || Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z) >= 3) continue;
+      prompt = `[E] Descansar — ${b.name}<br><small>recupera tudo, mas apaga a fogueira e atrai o monstro</small>`;
+      if (pressed.KeyE) {
+        sfx('bonfire'); showMsg('A FUMAÇA TE DENUNCIA', 'red', 2200);
+        game.bonfire = b; b.putOut(); fullRest(); monster.lead = P.pos.clone();
       }
+      break;
     }
-    if (!prompt && !game.gateOpen && !game.bossDefeated && Math.hypot(P.pos.x, P.pos.z - 36) < 5) {
-      prompt = '[E] Atravessar a névoa';
-      if (pressed.KeyE) { game.gateOpen = true; P.pos.set(0, 0, 40.5); P.root.rotation.y = 0; }
-    }
-  }
-  if (game.gateOpen && !game.bossFight && !game.bossDefeated && !boss.dead && P.pos.z > ARENA.z - ARENA.r + 3) {
-    startCutscene();
   }
   $('prompt').innerHTML = prompt;
-  // alma perdida
-  if (game.stain) {
-    game.stain.mesh.position.y = 0.8 + Math.sin(time * 3) * 0.15;
-    if (Math.hypot(P.pos.x - game.stain.mesh.position.x, P.pos.z - game.stain.mesh.position.z) < 1.6 && P.state !== 'dead') {
-      P.souls += game.stain.souls; game.stain.mesh.dispose(); game.stain = null; sfx('estus'); showMsg('ALMAS RECUPERADAS', 'gold', 1800);
-    }
-  }
+  if (game.sign) game.sign.t += dt;
+  // coração acelera quando ele está perto
+  const near = Math.hypot(monster.pos.x - P.pos.x, monster.pos.z - P.pos.z);
+  if (near < 22 && (game.heartT = (game.heartT || 0) - dt) <= 0) { game.heartT = lerp(0.42, 1.1, near / 22); sfx('heart', 1 - near / 22); }
   bonfires.forEach(b => { if (b.lit) b.light.intensity = 1.5 + Math.sin(time * 17) * 0.15 + Math.random() * 0.15; });
-  const pulse = Math.sin(time * (arenaMood === 'fight' ? 4 : 1.2)) * 0.5 + 0.5;
-  runeTex.level = arenaMood === 'fight' ? 0.7 + pulse * 0.5 : arenaMood === 'dead' ? 0.05 : 0.2 + pulse * 0.12;
-  arenaLight.intensity = arenaMood === 'fight' ? 1.0 + pulse * 0.5 : arenaMood === 'dead' ? 0.05 : 0.3 + pulse * 0.1;
-  fogGate.material.alpha = (game.bossFight ? 0.65 : 0.3) + Math.sin(time * 2) * 0.06;
 }
 
 function toggleLock() {
@@ -1031,62 +1056,13 @@ function toggleLock() {
   for (const e of enemies) {
     if (e.dead || !e.root.isEnabled()) continue;
     const dx = e.pos.x - P.pos.x, dz = e.pos.z - P.pos.z, d = Math.hypot(dx, dz);
-    if (d > 28) continue;
+    if (d > 28 || !canSee(P.pos, e.pos)) continue;
     const dot = (dx * fx + dz * fz) / d; if (dot < 0.2) continue;
     const score = dot * 2 - d / 28; if (score > bs) { bs = score; best = e; }
   }
   game.lock = best;
 }
 
-
-/* ------------------------------ cutscene do chefe ------------------------------ */
-function startCutscene() {
-  game.bossFight = true; boss.state = 'intro'; game.lock = null;
-  const B = boss.pos, yaw = Math.atan2(B.x - P.pos.x, B.z - P.pos.z), cp = Math.cos(0.32), sp = Math.sin(0.32);
-  const piv = new V3(P.pos.x, 1.7, P.pos.z), dir = new V3(Math.sin(yaw) * cp, -sp, Math.cos(yaw) * cp);
-  game.cut = { t: game.bossSeen ? 1.9 : 0, slam: false, yaw, endPos: piv.subtract(dir.scale(6.5)), endTgt: piv };
-  $('title').firstElementChild.textContent = boss.def.name; $('title').lastElementChild.textContent = boss.def.subtitle || '';
-  document.body.classList.add('cinematic');
-}
-function endCutscene() {
-  const c = game.cut; game.cut = null; game.bossSeen = true;
-  boss.introPose = false; boss.state = 'chase'; boss.cd = 0.8; boss.h.rArm.rotation.x = 0;
-  setArenaMood('fight'); cam.yaw = c.yaw; cam.pitch = 0.32; cam.dist = 6.5;
-  document.body.classList.remove('cinematic'); $('title').classList.remove('show');
-}
-function updateCutscene(dt) {
-  if (game.cut.kind === 'death') return updateDeathCut(dt);
-  const c = game.cut; c.t += dt; const t = c.t, B = boss.pos, slam = boss.def.attacks.find(a => a.kind === 'aoe');
-  if ((c.t > 0.8 && (pressed.Space || pressed.Enter || pressed.KeyE || pressed.M0)) || t >= 6.2) return endCutscene();
-  // pose do chefe: ergue a espada e bate no chao
-  if (t >= 1.9) {
-    boss.introPose = true;
-    if (t < 3.5) armPose(boss.h, 'windup', clamp((t - 1.9) / 1.6, 0, 1), slam);
-    else if (t < 3.62) armPose(boss.h, 'active', (t - 3.5) / 0.12, slam);
-    else armPose(boss.h, 'recover', clamp((t - 3.62) / 1.8, 0, 1), slam);
-  }
-  if (t >= 3.62 && !c.slam) {
-    c.slam = true; const f = boss.root.rotation.y;
-    burst(new V3(B.x + Math.sin(f) * 4, 0.3, B.z + Math.cos(f) * 4), 90); sfx('slam'); shake = 1.1; setArenaMood('fight');
-  }
-  if (t >= 3.7) $('title').classList.add('show');
-  const sm = x => x * x * (3 - 2 * x), L = (a, b, k) => V3.Lerp(a, b, k);
-  let pos, tgt;
-  if (t < 1.9) {
-    const k = sm(t / 1.9);
-    pos = L(new V3(B.x + 4, 1.0, B.z - 14), new V3(B.x + 2.5, 1.4, B.z - 9.5), k); tgt = L(new V3(B.x, 1.0, B.z), new V3(B.x, 4.0, B.z), k);
-  } else if (t < 3.5) {
-    const k = sm((t - 1.9) / 1.6);
-    pos = L(new V3(B.x - 3.5, 0.6, B.z - 8), new V3(B.x - 1.5, 0.8, B.z - 7), k); tgt = new V3(B.x, 4.6, B.z);
-  } else if (t < 3.9) {
-    pos = new V3(B.x + 7, 2.5, B.z - 6); tgt = new V3(B.x, 1.5, B.z - 3);
-  } else {
-    const k = sm(clamp((t - 3.9) / 2.3, 0, 1));
-    pos = L(new V3(B.x + 7, 2.5, B.z - 6), c.endPos, k); tgt = L(new V3(B.x, 1.5, B.z - 3), c.endTgt, k);
-  }
-  if (shake > 0) { pos.x += (Math.random() - 0.5) * shake; pos.y += (Math.random() - 0.5) * shake; shake = Math.max(0, shake - dt * 1.2); }
-  camera.position.copyFrom(pos); camera.setTarget(tgt);
-}
 
 function updateCamera(dt) {
   if (game.cut) { moon.position.set(P.pos.x + 30, 60, P.pos.z - 24); ash.emitter.set(P.pos.x, 2.5, P.pos.z); return; }
@@ -1096,17 +1072,12 @@ function updateCamera(dt) {
     else { cam.yaw = turnToward(cam.yaw, Math.atan2(game.lock.pos.x - P.pos.x, game.lock.pos.z - P.pos.z), 7 * dt); cam.pitch = lerp(cam.pitch, 0.32, 4 * dt); }
   }
   cam.dist = lerp(cam.dist, game.lock && game.lock.def.boss ? 11 : 6.5, 3 * dt);
-  const piv = new V3(P.pos.x, 1.7, P.pos.z), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  const piv = new V3(P.pos.x, P.pos.y + 1.7, P.pos.z), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   const dir = new V3(Math.sin(cam.yaw) * cp, -sp, Math.cos(cam.yaw) * cp);
   let dist = cam.dist;
-  if (hallWalls.length && P.pos.z > ARENA.z - ARENA.r - 4) {
-    const ray = new BABYLON.Ray(piv, dir.scale(-1), cam.dist + 0.4);
-    const inside = P.pos.z > fogGate.position.z;          // de dentro do salão a névoa também segura a câmera
-    const hit = scene.pickWithRay(ray, m => hallWalls.includes(m) || (inside && m === fogGate && m.isEnabled()));
-    if (hit && hit.hit) dist = Math.max(1.2, hit.distance - 0.4);
-  }
+  for (let s = 1; s < cam.dist + 0.4; s += 0.25) if (trunkAt(piv.x - dir.x * s, piv.z - dir.z * s)) { dist = Math.max(1.2, s - 0.4); break; }
   cam.cur = dist < cam.cur ? dist : lerp(cam.cur, dist, 5 * dt);   // entra rápido, sai suave
-  const pos = piv.subtract(dir.scale(cam.cur)); pos.y = Math.max(pos.y, 0.5);
+  const pos = piv.subtract(dir.scale(cam.cur)); pos.y = Math.max(pos.y, groundY(pos.x, pos.z) + 0.5);
   if (shake > 0) { pos.x += (Math.random() - 0.5) * shake; pos.y += (Math.random() - 0.5) * shake; shake = Math.max(0, shake - dt * 1.6); }
   camera.position.copyFrom(pos); camera.setTarget(piv);
   moon.position.set(P.pos.x + 30, 60, P.pos.z - 24);
@@ -1134,18 +1105,20 @@ $('start').addEventListener('click', () => {
   game.started = true; $('start').style.display = 'none';
   try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { }
   try { Promise.resolve(canvas.requestPointerLock()).catch(() => {}); } catch (_) { }
-  showMsg('KELWIN SOULS', 'gold', 3000);
+  showMsg('CACE O MONSTRO', 'gold', 3000); monster.roar();
 });
+$('end').addEventListener('click', () => location.reload());
 addEventListener('resize', () => engine.resize());
 
 /* ------------------------------ loop ------------------------------ */
 let clock = 0;
 scene.onBeforeRenderObservable.add(() => {
   const dt = Math.min(engine.getDeltaTime() / 1000, 0.05); clock += dt;
-  if (game.started) {
-    if (game.cut) updateCutscene(dt); else updatePlayer(dt);
+  if (game.started && !game.over) {
+    if (game.cut) updateDeathCut(dt); else { updatePlayer(dt); game.huntTime += dt; }
     enemies.forEach(e => e.update(dt));
     updateWorld(dt, clock);
+    updateTracks(dt);
   }
   updateCamera(dt);
   updateHud();
@@ -1155,4 +1128,4 @@ engine.runRenderLoop(() => scene.render());
 loadAssets();
 
 // atalho de depuração para testes: window.__ks
-window.__ks = { P, enemies, game, bonfires, CONFIG };
+window.__ks = { P, enemies, game, bonfires, CONFIG, NAV, get monster() { return monster; }, endHunt };
