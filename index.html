@@ -3,108 +3,84 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kelwin Souls</title>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+<title>Abissal</title>
 <style>
-  :root { --gold:#d9c28a; --red:#8b1a1a; --green:#4f7a35; --ink:#0b0b0e; }
+  :root { --hud:#7fd6c4; --warn:#e8b24a; --red:#d8392f; --ink:#01060a; }
   * { box-sizing:border-box; }
-  html,body { margin:0; height:100%; overflow:hidden; background:var(--ink); font-family:'Cinzel',Georgia,serif; color:var(--gold); user-select:none; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--ink); color:var(--hud); font-family:'Consolas','Courier New',monospace; user-select:none; }
   #c { width:100%; height:100%; display:block; outline:none; }
-  #hud { position:fixed; inset:0; pointer-events:none; }
-  #bars { position:absolute; left:24px; top:20px; }
-  .bar { height:14px; margin-bottom:6px; background:rgba(0,0,0,.65); border:1px solid #3a342a; }
-  .bar > i { display:block; height:100%; width:100%; transition:width .12s linear; }
-  #hp > i { background:linear-gradient(#b32525,#6e1212); }
-  #st > i { background:linear-gradient(#6ea048,#3d5f28); }
-  #estus { font-size:14px; margin-top:4px; letter-spacing:1px; }
-  #lives { position:absolute; right:28px; bottom:22px; font-size:26px; color:#c43030; text-shadow:0 0 8px #000; text-align:right; }
-  #lives small { display:block; font-size:12px; color:var(--gold); opacity:.7; letter-spacing:2px; }
-  #hunt { position:absolute; left:50%; top:20px; width:min(420px,44vw); transform:translateX(-50%); text-align:center; text-shadow:0 0 6px #000; }
-  #compass { position:relative; height:16px; overflow:hidden; border:1px solid #3a342a; background:rgba(0,0,0,.55); }
-  #compass::before { content:''; position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--gold); opacity:.6; }
-  #mark { position:absolute; top:2px; width:10px; height:10px; margin-left:-5px; background:#e0531f; transform:rotate(45deg); opacity:0; box-shadow:0 0 8px #e0531f; }
-  #signD { font-size:12px; letter-spacing:1px; opacity:.75; margin-top:3px; }
-  #status { font-size:14px; letter-spacing:3px; margin-top:3px; }
-  #status.danger { color:#d33; } #status.prey { color:#e8d28a; }
-  @media (max-width:1100px) { #hunt { top:72px; } }
-  #prompt small { font-size:13px; opacity:.75; }
-  #end { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; cursor:pointer; z-index:6; background:rgba(5,5,8,.86); }
-  #end.show { display:flex; }
-  #endT { font-size:clamp(28px,6vw,60px); letter-spacing:.12em; font-weight:700; }
-  #end.won #endT { color:#e8d28a; } #end.lost #endT { color:#a01818; }
-  #endS { font-size:18px; letter-spacing:2px; opacity:.85; }
-  #end .go { font-size:18px; letter-spacing:5px; animation:pulse 1.6s infinite; margin-top:8px; }
-  #prompt { position:absolute; left:50%; bottom:18%; transform:translateX(-50%); font-size:18px; text-align:center; text-shadow:0 0 6px #000; line-height:1.6; }
-  #msg { position:absolute; left:0; right:0; top:42%; text-align:center; font-size:46px; letter-spacing:8px; opacity:0; transition:opacity .8s; text-shadow:0 0 18px #000; }
+  #hud { position:fixed; inset:0; pointer-events:none; text-shadow:0 0 6px rgba(0,0,0,.9); }
+  #gauges { position:absolute; left:28px; bottom:26px; width:240px; font-size:13px; letter-spacing:1px; }
+  .row { display:flex; justify-content:space-between; margin-top:8px; }
+  .bar { height:7px; border:1px solid rgba(127,214,196,.55); background:rgba(0,0,0,.45); margin-top:3px; }
+  .bar i { display:block; height:100%; width:100%; background:var(--hud); }
+  #o2Bar.low i { background:var(--red); } #o2Bar.low { border-color:var(--red); }
+  #goals { position:absolute; left:28px; top:24px; font-size:13px; line-height:1.8; letter-spacing:1px; }
+  #goals b { display:block; font-weight:400; opacity:.65; }
+  #goals .done { opacity:.4; text-decoration:line-through; }
+  #radar { position:absolute; right:28px; bottom:26px; width:150px; height:150px; border-radius:50%; border:1px solid rgba(127,214,196,.5); background:rgba(0,12,14,.5); opacity:0; transition:opacity .4s; overflow:hidden; }
+  #radar.on { opacity:1; }
+  #radar::before { content:''; position:absolute; left:50%; top:50%; width:5px; height:5px; margin:-2px; background:var(--hud); border-radius:50%; }
+  #radar i { position:absolute; width:8px; height:8px; margin:-4px; border-radius:50%; background:var(--hud); box-shadow:0 0 8px var(--hud); }
+  #radar i.bad { background:var(--red); box-shadow:0 0 10px var(--red); width:11px; height:11px; margin:-5px; }
+  #sonarTxt { position:absolute; right:28px; bottom:184px; width:150px; text-align:center; font-size:12px; letter-spacing:1px; }
+  #prompt { position:absolute; left:50%; top:62%; transform:translateX(-50%); font-size:16px; letter-spacing:1px; text-align:center; }
+  #msg { position:absolute; left:0; right:0; top:24%; text-align:center; font-size:18px; letter-spacing:4px; opacity:0; transition:opacity .8s; color:var(--warn); }
   #msg.show { opacity:1; }
-  #msg.gold { color:#e8d28a; } #msg.red { color:#a01818; }
-  #boss { position:absolute; left:50%; bottom:7%; width:min(720px,70vw); transform:translateX(-50%); display:none; }
-  #boss .name { font-size:18px; margin-bottom:4px; letter-spacing:2px; }
-  #boss .bar { height:12px; } #boss .bar > i { background:linear-gradient(#a82a2a,#5c1010); }
-  #lock { position:absolute; width:14px; height:14px; margin:-7px 0 0 -7px; border:2px solid #e8d28a; border-radius:50%; display:none; box-shadow:0 0 8px #000; }
-  #death { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:clamp(28px,7vw,72px); letter-spacing:.18em; color:#9b1515; text-align:center;
-           background:radial-gradient(ellipse at center,rgba(0,0,0,.55),rgba(0,0,0,.92)); opacity:0; transition:opacity 1.2s; }
-  #death.show { opacity:1; }
-  #start { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
-           background:rgba(5,5,8,.92); cursor:pointer; text-align:center; z-index:5; }
-  #start h1 { font-size:64px; letter-spacing:12px; margin:0; font-weight:700; }
-  #start p { margin:0; font-size:15px; line-height:1.9; letter-spacing:1px; max-width:640px; opacity:.85; }
-  #start .go { margin-top:10px; font-size:20px; letter-spacing:6px; animation:pulse 1.6s infinite; }
+  #cross { position:absolute; left:50%; top:50%; width:3px; height:3px; margin:-1px; background:rgba(127,214,196,.5); border-radius:50%; }
+  #fade { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity 1.5s; z-index:4; }
+  .screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:24px; z-index:5; cursor:pointer; background:rgba(1,6,10,.9); }
+  .screen.hidden { display:none; }
+  .screen h1 { font-size:clamp(40px,8vw,84px); letter-spacing:.3em; margin:0 0 0 .3em; font-weight:400; }
+  .screen p { margin:0; max-width:680px; font-size:15px; line-height:1.9; opacity:.85; }
+  .go { margin-top:12px; font-size:17px; letter-spacing:5px; animation:pulse 1.8s infinite; }
   @keyframes pulse { 50% { opacity:.3; } }
-  .lb { position:fixed; left:0; right:0; height:0; background:#000; z-index:3; transition:height .9s ease; }
-  #lbT { top:0; } #lbB { bottom:0; }
-  body.cinematic .lb { height:12%; }
-  #hud > * { transition:opacity .6s; }
-  body.cinematic #hud > *:not(#title):not(#skip) { opacity:0 !important; }
-  #title { position:absolute; left:0; right:0; bottom:20%; text-align:center; opacity:0; transition:opacity 1.4s; z-index:4; }
-  #title.show { opacity:1; }
-  #title h2 { margin:0; font-size:clamp(28px,6vw,64px); letter-spacing:.16em; color:#e8d28a; font-weight:700; text-shadow:0 0 24px #000; }
-  #title p { margin:8px 0 0; font-size:clamp(14px,2vw,22px); letter-spacing:.3em; color:#b9a77a; }
-  #skip { position:absolute; right:24px; bottom:14px; font-size:13px; letter-spacing:2px; opacity:0; z-index:4; }
-  body.cinematic #skip { opacity:.7 !important; }
-  kbd { border:1px solid #6b5f45; padding:0 6px; border-radius:3px; }
+  kbd { border:1px solid rgba(127,214,196,.5); padding:0 6px; border-radius:3px; }
+  #dead h1 { color:var(--red); }
 </style>
 </head>
 <body>
 <canvas id="c" touch-action="none"></canvas>
 
 <div id="hud">
-  <div id="bars">
-    <div class="bar" id="hp"><i></i></div>
-    <div class="bar" id="st"><i></i></div>
-    <div id="estus"></div>
+  <div id="goals"><b>CAIXAS DE REGISTRO</b><div id="goalList"></div></div>
+  <div id="gauges">
+    <div class="row"><span>O₂</span><span id="o2Txt"></span></div><div class="bar" id="o2Bar"><i></i></div>
+    <div class="row"><span>LANTERNA</span><span id="batTxt"></span></div><div class="bar" id="batBar"><i></i></div>
+    <div class="row"><span>SINALIZADORES <span id="flareN"></span></span><span id="depth"></span></div>
   </div>
-  <div id="lives"><small>VIDAS</small><span id="livesN"></span></div>
-  <div id="hunt"><div id="compass"><div id="mark"></div></div><div id="signD"></div><div id="status"></div></div>
+  <div id="sonarTxt"></div>
+  <div id="radar"></div>
+  <div id="cross"></div>
   <div id="prompt"></div>
   <div id="msg"></div>
-  <div id="boss"><div class="name"></div><div class="bar"><i></i></div></div>
-  <div id="lock"></div>
-  <div id="title"><h2></h2><p></p></div>
-  <div id="skip">[ESPAÇO] PULAR</div>
-  <div id="death">VOCÊ MORREU</div>
 </div>
+<div id="fade"></div>
 
-<div class="lb" id="lbT"></div><div class="lb" id="lbB"></div>
-
-<div id="end"><div id="endT"></div><div id="endS"></div><div class="go">CLIQUE PARA CAÇAR DE NOVO</div></div>
-
-<div id="start">
-  <h1>KELWIN SOULS</h1>
+<div class="screen" id="start">
+  <h1>ABISSAL</h1>
   <p>
-    <strong>Cace o monstro antes que ele cace você.</strong> Mate-o para vencer. Você tem 3 vidas.<br>
-    Siga as pegadas em brasa e a bússola do rugido. Correr e lutar fazem barulho: ele ouve.<br>
-    Ataque antes de ele te notar para causar dano de emboscada.<br><br>
-    <kbd>W A S D</kbd> mover &nbsp; <kbd>Mouse</kbd> câmera &nbsp; <kbd>Shift</kbd> correr &nbsp; <kbd>Espaço</kbd> rolar<br>
-    <kbd>Botão esq.</kbd> ataque leve &nbsp; <kbd>Botão dir.</kbd> ataque pesado &nbsp; <kbd>F</kbd> defender<br>
-    <kbd>Q</kbd> fixar alvo &nbsp; <kbd>R</kbd> Estus &nbsp; <kbd>E</kbd> descansar na fogueira<br>
-    <kbd>← →</kbd> girar câmera sem mouse lock &nbsp; <kbd>Esc</kbd> soltar o mouse
+    Uma equipe sumiu neste vale submarino. Recupere as <strong>3 caixas de registro</strong> e volte ao cabo do barco.<br>
+    O oxigênio não espera. E você não está sozinho aqui embaixo.<br><br>
+    <kbd>W A S D</kbd> nadar &nbsp; <kbd>Mouse</kbd> olhar &nbsp; <kbd>Espaço</kbd> subir &nbsp; <kbd>Ctrl</kbd> ou <kbd>C</kbd> descer &nbsp; <kbd>Shift</kbd> nadar rápido<br>
+    <kbd>F</kbd> lanterna &nbsp; <kbd>Q</kbd> sonar &nbsp; <kbd>G</kbd> sinalizador &nbsp; <kbd>E</kbd> interagir &nbsp; <kbd>Esc</kbd> soltar o mouse<br><br>
+    A luz, o sonar e a pressa chamam a atenção dele. No escuro, você quase desaparece.<br>
+    Um sinalizador pode atraí-lo para longe. Ele não passa pelas portas estreitas do naufrágio.
   </p>
-  <div class="go" id="goText">CARREGANDO...</div>
+  <div class="go">CLIQUE PARA MERGULHAR</div>
+</div>
+<div class="screen hidden" id="dead">
+  <h1 id="deadT"></h1>
+  <p id="deadS"></p>
+  <div class="go">CLIQUE PARA MERGULHAR DE NOVO</div>
+</div>
+<div class="screen hidden" id="win">
+  <h1>SUPERFÍCIE</h1>
+  <p id="winS"></p>
+  <div class="go">CLIQUE PARA MERGULHAR DE NOVO</div>
 </div>
 
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/babylonjs@7.54.0/babylon.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
