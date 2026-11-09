@@ -1,0 +1,19 @@
+# Cache do Godot (regenerado na importação)
+.godot/
+game/.godot/
+
+# Arquivos temporários do pipeline Python
+build/
+__pycache__/
+*.pyc
+
+# Modelos originais (0,3–3 milhões de triângulos, até 176 MB cada; GitHub limita a 100 MB por arquivo).
+# Ficam só na máquina local; o pipeline gera as versões otimizadas em game/assets/models/.
+/*.glb
+
+# Asset de Game of Thrones (HBO): uso pessoal apenas, não distribuir. Também passa de 100 MB.
+game/assets/models/drogon_*
+
+# Sistema
+Thumbs.db
+desktop.ini

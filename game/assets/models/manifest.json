@@ -1,0 +1,453 @@
+{
+ "aurencast__the_ivory_oathkeeper": {
+  "title": "Aurencast, o Guardião do Juramento",
+  "role": "boss",
+  "region": "cidadela_marfim",
+  "height_m": 3.2,
+  "tris_in": 3103326,
+  "tris_out": 48470,
+  "size_m": [
+   2.32,
+   3.2,
+   1.6
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/aurencast__the_ivory_oathkeeper.glb",
+  "mb": 4.4
+ },
+ "astravyne__the_ivory_bloodlancer": {
+  "title": "Astravyne, a Lanceira de Sangue",
+  "role": "elite",
+  "region": "cidadela_marfim",
+  "height_m": 2.4,
+  "tris_in": 1960972,
+  "tris_out": 122560,
+  "size_m": [
+   0.91,
+   2.4,
+   0.92
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/astravyne__the_ivory_bloodlancer.glb",
+  "mb": 9.5
+ },
+ "drakvald__the_ivory_dreadmarshal": {
+  "title": "Drakvald, o Marechal do Pavor",
+  "role": "elite",
+  "region": "cidadela_marfim",
+  "height_m": 2.6,
+  "tris_in": 1685786,
+  "tris_out": 52680,
+  "size_m": [
+   2.38,
+   2.6,
+   2.35
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/drakvald__the_ivory_dreadmarshal.glb",
+  "mb": 4.3
+ },
+ "ivorae__the_faceless_queen": {
+  "title": "Ivorae, a Rainha sem Rosto",
+  "role": "boss",
+  "region": "cidadela_marfim",
+  "height_m": 4.0,
+  "tris_in": 1190480,
+  "tris_out": 74404,
+  "size_m": [
+   2.47,
+   4.0,
+   1.65
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/ivorae__the_faceless_queen.glb",
+  "mb": 4.1
+ },
+ "rhaum__the_hellforged_colossus": {
+  "title": "Rhaum, o Colosso Forjado no Inferno",
+  "role": "boss",
+  "region": "fornalha",
+  "height_m": 7.0,
+  "tris_in": 1141268,
+  "tris_out": 71327,
+  "size_m": [
+   4.83,
+   7.0,
+   2.62
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/rhaum__the_hellforged_colossus.glb",
+  "mb": 5.9
+ },
+ "hellforged_behemoth__the_infernal_titan": {
+  "title": "O Titã Infernal",
+  "role": "boss",
+  "region": "fornalha",
+  "height_m": 8.0,
+  "tris_in": 1065460,
+  "tris_out": 66590,
+  "size_m": [
+   6.94,
+   8.0,
+   3.93
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/hellforged_behemoth__the_infernal_titan.glb",
+  "mb": 2.4
+ },
+ "gorthazul__the_ashhorn_behemoth": {
+  "title": "Gorthazul, o Beemote Chifre-de-Cinza",
+  "role": "elite",
+  "region": "fornalha",
+  "height_m": 5.0,
+  "tris_in": 701253,
+  "tris_out": 43827,
+  "size_m": [
+   3.68,
+   5.0,
+   2.81
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/gorthazul__the_ashhorn_behemoth.glb",
+  "mb": 2.3
+ },
+ "vormak__the_ashen_headsman": {
+  "title": "Vormak, o Carrasco Cinzento",
+  "role": "boss",
+  "region": "fornalha",
+  "height_m": 3.0,
+  "tris_in": 2211342,
+  "tris_out": 69096,
+  "size_m": [
+   2.64,
+   3.0,
+   1.66
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/vormak__the_ashen_headsman.glb",
+  "mb": 4.6
+ },
+ "volcanic_obsidian_golem_creature": {
+  "title": "Golem de Obsidiana Vulcânica",
+  "role": "elite",
+  "region": "fornalha",
+  "height_m": 5.5,
+  "tris_in": 1912258,
+  "tris_out": 59758,
+  "size_m": [
+   5.86,
+   5.5,
+   2.3
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/volcanic_obsidian_golem_creature.glb",
+  "mb": 3.1
+ },
+ "nexmora__the_obsidian_matriarch": {
+  "title": "Nexmora, a Matriarca de Obsidiana",
+  "role": "boss",
+  "region": "abismo_obsidiana",
+  "height_m": 3.6,
+  "tris_in": 491436,
+  "tris_out": 61427,
+  "size_m": [
+   1.32,
+   3.6,
+   0.76
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/nexmora__the_obsidian_matriarch.glb",
+  "mb": 4.1
+ },
+ "varkhen__the_obsidian_oathbreaker": {
+  "title": "Varkhen, o Quebra-Juramentos",
+  "role": "elite",
+  "region": "abismo_obsidiana",
+  "height_m": 2.5,
+  "tris_in": 1066224,
+  "tris_out": 66638,
+  "size_m": [
+   1.51,
+   2.5,
+   1.22
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/varkhen__the_obsidian_oathbreaker.glb",
+  "mb": 2.7
+ },
+ "sylvaris__the_frostveil_duelist": {
+  "title": "Sylvaris, a Duelista do Véu Gélido",
+  "role": "elite",
+  "region": "picos_gelidos",
+  "height_m": 2.2,
+  "tris_in": 1632584,
+  "tris_out": 51018,
+  "size_m": [
+   1.04,
+   2.2,
+   0.61
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/sylvaris__the_frostveil_duelist.glb",
+  "mb": 3.7
+ },
+ "veltharion__the_frostbound_cavalier": {
+  "title": "Veltharion, o Cavaleiro Congelado",
+  "role": "boss",
+  "region": "picos_gelidos",
+  "height_m": 3.4,
+  "tris_in": 311045,
+  "tris_out": 77757,
+  "size_m": [
+   3.03,
+   3.4,
+   2.71
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/veltharion__the_frostbound_cavalier.glb",
+  "mb": 3.9
+ },
+ "ravenkor__the_bloodsteel_duelist": {
+  "title": "Ravenkor, o Maculado de Aço-Sangue",
+  "role": "player",
+  "region": "todas",
+  "height_m": 2.0,
+  "tris_in": 1170723,
+  "tris_out": 73161,
+  "size_m": [
+   1.66,
+   2.0,
+   1.84
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/ravenkor__the_bloodsteel_duelist.glb",
+  "mb": 4.7
+ },
+ "zarakhul__the_bloodthorn_centaur": {
+  "title": "Zarakhul, o Centauro Espinho-Sangrento",
+  "role": "boss",
+  "region": "pantano_espinhos",
+  "height_m": 3.8,
+  "tris_in": 2280306,
+  "tris_out": 71258,
+  "size_m": [
+   5.11,
+   3.8,
+   2.84
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/zarakhul__the_bloodthorn_centaur.glb",
+  "mb": 5.7
+ },
+ "morvessa__the_thorn_matriarch": {
+  "title": "Morvessa, a Matriarca dos Espinhos",
+  "role": "boss",
+  "region": "pantano_espinhos",
+  "height_m": 4.5,
+  "tris_in": 1913162,
+  "tris_out": 59784,
+  "size_m": [
+   2.34,
+   4.5,
+   2.11
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/morvessa__the_thorn_matriarch.glb",
+  "mb": 4.4
+ },
+ "osskaroth__the_boneheap_revenant": {
+  "title": "Osskaroth, o Revenante do Ossuário",
+  "role": "boss",
+  "region": "cemiterio",
+  "height_m": 4.5,
+  "tris_in": 1773352,
+  "tris_out": 55414,
+  "size_m": [
+   3.95,
+   4.5,
+   2.25
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/osskaroth__the_boneheap_revenant.glb",
+  "mb": 5.2
+ },
+ "gravestone_golem_-_cemetery_guardian": {
+  "title": "Golem Lápide, Guardião do Cemitério",
+  "role": "elite",
+  "region": "cemiterio",
+  "height_m": 4.0,
+  "tris_in": 1900988,
+  "tris_out": 59404,
+  "size_m": [
+   3.57,
+   4.0,
+   1.48
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/gravestone_golem_-_cemetery_guardian.glb",
+  "mb": 3.4
+ },
+ "the_holy_rider__mounted_crusader": {
+  "title": "O Cavaleiro Sagrado",
+  "role": "elite",
+  "region": "vale_inicial",
+  "height_m": 3.2,
+  "tris_in": 1935411,
+  "tris_out": 60479,
+  "size_m": [
+   2.89,
+   3.2,
+   2.26
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/the_holy_rider__mounted_crusader.glb",
+  "mb": 4.3
+ },
+ "sister_vesper__the_veiled_oath": {
+  "title": "Irmã Vesper do Juramento Velado",
+  "role": "npc",
+  "region": "vale_inicial",
+  "height_m": 1.9,
+  "tris_in": 1035933,
+  "tris_out": 32366,
+  "size_m": [
+   1.12,
+   1.9,
+   0.9
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/sister_vesper__the_veiled_oath.glb",
+  "mb": 1.6
+ },
+ "vaelrith__the_veiled_horn": {
+  "title": "Vaelrith, o Chifre Velado",
+  "role": "enemy",
+  "region": "vale_inicial",
+  "height_m": 2.2,
+  "tris_in": 548508,
+  "tris_out": 34280,
+  "size_m": [
+   1.23,
+   2.2,
+   0.89
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/vaelrith__the_veiled_horn.glb",
+  "mb": 2.7
+ },
+ "zhenkar__the_crimson_oni_shogun": {
+  "title": "Zhenkar, o Xogum Oni Carmesim",
+  "role": "boss",
+  "region": "pagode_carmesim",
+  "height_m": 3.0,
+  "tris_in": 1122206,
+  "tris_out": 70134,
+  "size_m": [
+   1.55,
+   3.0,
+   2.2
+  ],
+  "scale_applied": true,
+  "file": "res://assets/models/zhenkar__the_crimson_oni_shogun.glb",
+  "mb": 4.3
+ },
+ "gastaroid_queen": {
+  "title": "Rainha Gastaroide",
+  "role": "boss",
+  "region": "pantano_espinhos",
+  "height_m": 5.0,
+  "animated": true,
+  "animations": [
+   "Take 001"
+  ],
+  "scale_applied": false,
+  "file": "res://assets/models/gastaroid_queen.glb",
+  "mb": 9.8
+ },
+ "red_dragon": {
+  "title": "Kelvhar, o Dragão Rubro",
+  "role": "dragon",
+  "region": "fornalha",
+  "height_m": 9.0,
+  "animated": true,
+  "animations": [
+   "RedDragon_Armature|angryFlightPose",
+   "RedDragon_Armature|aura",
+   "RedDragon_Armature|flight_fiire_render",
+   "RedDragon_Armature|flight_fire",
+   "RedDragon_Armature|flightTest",
+   "RedDragon_Armature|ref",
+   "RedDragon_Armature|ref_shieht",
+   "RedDragon_Armature|test",
+   "RedDragon_Armature|weirdTest"
+  ],
+  "scale_applied": false,
+  "file": "res://assets/models/red_dragon.glb",
+  "mb": 6.3
+ },
+ "drogon_-_dragon_game_of_thrones": {
+  "title": "O Dragão Ancestral",
+  "role": "dragon",
+  "region": "picos_gelidos",
+  "height_m": 12.0,
+  "animated": true,
+  "note": "Asset de Game of Thrones (HBO): só para uso pessoal, não distribuir.",
+  "animations": [
+   "SKM_DaenerysDragon|AA_DaenerysDragon_Battle_Stand",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Attack01",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Attack02",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Attack03",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Attack04",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Attack06",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Down",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Down02",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill01",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill02",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill02_01",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill03",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill03_01",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill05",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill06",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill07",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill08",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill10_L",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill10_R",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill11_L",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Skill11_R",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_SkyMoveL",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_SkyMoveR",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_SkyMoveR01",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_TurnL180",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_TurnL20",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_TurnL90",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_TurnR180",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_TurnR20",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_TurnR90",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Up",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_Walk",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_WalkL",
+   "SKM_DaenerysDragon|DaenerysDragon_Battle_WalkR",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_Add_BattleStand_Chest",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_Add_BattleStand_LeftFoot",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_Add_BattleStand_RightFoot",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_Add_Groggy",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_GroggyAttack",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_GroggyEnd",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_GroggyLoop",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_GroggyStart",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_Staggering_Front_Body",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_Staggering_Left_Body",
+   "SKM_DaenerysDragon|DaenerysDragon_Damage_Staggering_Right_Body",
+   "SKM_DaenerysDragon|DaenerysDragon_Death",
+   "SKM_DaenerysDragon|DaenerysDragon_Death01",
+   "SKM_DaenerysDragon|DaenerysDragon_Neutural_BackKick",
+   "SKM_DaenerysDragon|DaenerysDragon_Neutural_Roar",
+   "SKM_DaenerysDragon|DaenerysDragon_Neutural_Watch",
+   "SKM_DaenerysDragon|DaenerysDragon_Spawn",
+   "SKM_DaenerysDragon|DaenerysDragon_Spawn01"
+  ],
+  "scale_applied": false,
+  "file": "res://assets/models/drogon_-_dragon_game_of_thrones.glb",
+  "mb": 115.4
+ }
+}
