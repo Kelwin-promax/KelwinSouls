@@ -47,6 +47,8 @@ Os chefes em **negrito** dão Grandes Brasas. Cada chefe derrotado também dá +
 | Beber Lágrima Ígnea | R | X |
 | Interagir / Graça | E | A |
 | Mapa / Pausa | M / Esc | Back / Start |
+| Inventário | I | D-pad para baixo |
+| Montar / desmontar o cavalo | G | D-pad para a esquerda |
 
 ## Como rodar
 
@@ -63,7 +65,13 @@ python tools/asset_pipeline.py      # otimiza os 25 .glb da raiz → game/assets
 python tools/gen_world.py [semente] # heightmap 8x8 km, biomas, estradas, chefes, inimigos, props, mapa
 python tools/gen_audio.py           # sintetiza todos os sons e músicas (sem direitos autorais)
 python tools/gen_textures.py        # texturas procedurais tileáveis (terreno, pedra, marfim, madeira...)
+"C:\Program Files\Blender Foundation\Blender 4.5\blender.exe" -b -P tools/rig/rig_humanoid.py -- --in game/assets/models/X.glb --out game/assets/models/X__rig.glb   # rigging de um humanoide
+powershell -ExecutionPolicy Bypass -File tools/build_exe.ps1 -Godot "caminho\Godot_v4.7.2-stable_win64_console.exe"   # gera build/KelwinSouls.exe
 ```
+
+Testes (headless): `godot --headless --path game -s res://tests/smoke_test.gd` verifica montaria, masmorra, cena do chefe, menus, NPC e clima. `res://tests/screenshots.gd` (com janela) grava capturas em `build/shots/`.
+
+Para o `.exe`, instale os export templates 4.7.2 (Editor > Gerenciar Modelos de Exportação). O preset exclui o asset de Game of Thrones (`game/export_presets.cfg`).
 
 * **Modelos**: o Python funde os pedaços de malha, solda vértices, remove UVs extras, centraliza, reescala para a altura de `tools/catalog.py` e reduz as texturas. Em seguida o Godot (meshoptimizer) simplifica de 0,3 a 3,1 milhões para cerca de 35 a 75 mil triângulos, e o Godot gera LODs extras na importação.
 * **Catálogo**: `tools/catalog.py` define nome, papel (jogador/chefe/elite/inimigo), região e altura de cada modelo.
@@ -82,17 +90,23 @@ scripts/actors/player.gd    jogador: combos, pesado, rolamento com i-frames, def
 scripts/actors/enemy.gd     IA por estados com ataques telegrafados e postura (stagger)
 scripts/actors/boss.gd      arena com névoa, fase 2, Grande Brasa
 scripts/actors/dragon.gd    dragão terrestre (animações reais) e dragão voador (rasantes de fogo)
-scripts/actors/model_rig.gd animação procedural para modelos sem esqueleto
+scripts/actors/model_rig.gd animação procedural (e por esqueleto, quando o modelo tem __rig)
+scripts/actors/horse.gd     cavalo da montaria (primitivas, animação de passo)
+scripts/actors/npc.gd       NPCs com diálogo ramificado e efeitos persistentes
+scripts/world/dungeon.gd    masmorras: portal no mundo, labirinto gerado, guardião e baú
+scripts/world/sky_cycle.gd  dia/noite, clima e chuva
+scripts/world/architecture.gd telhados, arcos e ameias gerados em código
+tests/smoke_test.gd         teste headless das etapas 4 e 5
 shaders/terrain.gdshader    deslocamento por heightmap + splatting de 8 camadas
 ```
 
 ## Etapas
 
 - [x] **Etapa 1: base jogável.** Pipeline de assets, mundo de 8 km, 8 regiões, 13 chefes e 2 dragões, cerca de 195 inimigos, combate souls, Graças, morte com perda de Brasas, subir de nível, viagem rápida, mapa, 3 finais, sons e músicas.
-- [ ] **Etapa 2: animação real.** Rigging dos humanoides (Blender + Rigify, ou Mixamo) e animações de ataque, andar e morrer.
-- [ ] **Etapa 3: arte do mundo.** Props modelados no Blender (castelo, pontes, catedral), texturas CC0 (Poly Haven/ambientCG), grama e vegetação densa.
-- [ ] **Etapa 4: profundidade.** Armas e equipamentos, magias/FP, NPCs com diálogos (Irmã Vesper), montaria, masmorras.
-- [ ] **Etapa 5: polimento.** Ciclo dia/noite, clima, cutscenes de chefe, menus de inventário, exportação .exe.
+- [~] **Etapa 2: animação real (parcial).** Pipeline de rigging em Blender (`tools/rig/rig_humanoid.py`) com esqueleto e ações idle, walk, run, attack_light, attack_heavy, hit e death. Aplicado a Irmã Vesper, Astravyne, Drakvald, Sylvaris, Varkhen, Aurencast, Ivorae e Vormak. Pendente: revisão visual dos rigs em jogo, e o protagonista Ravenkor continua procedural (a pose de repouso é ajoelhada). Para qualidade final, use Mixamo ou Rigify com pose em pé.
+- [~] **Etapa 3: arte do mundo (parcial).** Cidadela com ameias e arco no portão, pagode com telhados de quatro águas e beirais, forja com oficina, chaminé e bigorna (`scripts/world/architecture.gd`). Pontes: o código existe, mas nenhuma estrada do mapa atravessa água, então nenhuma é construída. Pendente: texturas CC0 (Poly Haven/ambientCG) e grama densa.
+- [x] **Etapa 4: profundidade.** Montaria (cavalo procedural, tecla G), duas masmorras geradas proceduralmente (Catacumbas de Ghelm e Poço do Pântano), NPCs com diálogo ramificado (Irmã Vesper e Ferreiro Cinzento). Armas, equipamentos e magias ficam para uma etapa futura.
+- [~] **Etapa 5: polimento (quase completa).** Ciclo dia/noite, clima (nublado, chuva, tempestade com relâmpagos), inventário (tecla I), cena de entrada do chefe, preset de exportação para Windows. Pendente: gerar o `.exe` (precisa dos export templates 4.7.2, ver abaixo).
 
 ## Observações
 

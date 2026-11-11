@@ -20,6 +20,9 @@ var _flash_t := 0.0
 var _meshes: Array[MeshInstance3D] = []
 var _flash_mat: StandardMaterial3D
 var tween: Tween
+## True quando o modelo tem esqueleto e clipes (idle, walk, run, attack_light, attack_heavy).
+var rigged := false
+var _clip_busy := 0.0          # tempo restante de um golpe animado (locomoção não sobrescreve)
 
 
 func build(model_name: String, yaw_offset := DEFAULT_YAW_OFFSET, extra_scale := 1.0) -> void:
@@ -38,7 +41,7 @@ func build(model_name: String, yaw_offset := DEFAULT_YAW_OFFSET, extra_scale := 
 		# modelos animados: mede o AABB e reescala para a altura do catálogo
 		var aabb := _measure(model)
 		var target := float(info.get("height_m", 4.0))
-		var s := target / max(aabb.size.y, 0.001)
+		var s: float = target / max(aabb.size.y, 0.001)
 		model.scale = Vector3.ONE * s
 		model.position.y = -aabb.position.y * s
 		height = target
@@ -48,11 +51,13 @@ func build(model_name: String, yaw_offset := DEFAULT_YAW_OFFSET, extra_scale := 
 		height *= extra_scale
 		radius *= extra_scale
 	anim = _find_anim(model)
+	rigged = anim != null and Game.has_rig(model_name)
 	if anim:
 		for a_name in anim.get_animation_list():
 			var low := a_name.to_lower()
 			if low.contains("stand") or low.contains("walk") or low.contains("flight") or low.contains("take") \
-					or low.contains("groggyloop") or low.contains("skymove") or low.contains("aura"):
+					or low.contains("groggyloop") or low.contains("skymove") or low.contains("aura") \
+					or (rigged and (low == "idle" or low == "run")):
 				anim.get_animation(a_name).loop_mode = Animation.LOOP_LINEAR
 	_collect_meshes(model)
 	_flash_mat = StandardMaterial3D.new()
@@ -112,8 +117,37 @@ func set_overlay(mat: Material) -> void:
 		m.material_overlay = mat
 
 
+## Reinicia um clipe mesmo que já seja o atual (para golpes seguidos começarem do início).
+func _restart(clip_name: String, speed: float) -> void:
+	anim.stop()
+	anim.play(clip_name, 0.05, speed)
+
+
+func _clip_length(part: String) -> float:
+	for a in anim.get_animation_list():
+		if a.to_lower().contains(part):
+			return anim.get_animation(a).length
+	return 0.0
+
+
+## Locomoção por esqueleto: parado = idle, andando = walk, correndo = run (velocidade acompanha o passo).
+func _drive_locomotion(speed01: float) -> void:
+	if _clip_busy > 0.0:
+		return
+	if speed01 > 0.05:
+		if speed01 > 0.6:
+			play_anim(["run"], 0.8 + speed01 * 0.4, 0.2)
+		else:
+			play_anim(["walk"], 0.7 + speed01 * 0.9, 0.2)
+	else:
+		play_anim(["idle"], 1.0, 0.3)
+
+
 ## Atualiza o balanço procedural. speed01 = 0..1 (parado..correndo); turn = velocidade angular.
 func tick(delta: float, speed01: float, turn: float, grounded := true) -> void:
+	if rigged:
+		_clip_busy = maxf(0.0, _clip_busy - delta)
+		_drive_locomotion(speed01)
 	_breath += delta * 1.6
 	_phase += delta * (5.5 + speed01 * 6.0) * (1.0 if speed01 > 0.05 else 0.0)
 	var target_bob := absf(sin(_phase)) * 0.09 * speed01 * height / 2.0
@@ -145,6 +179,15 @@ func new_tween() -> Tween:
 ## Sequência de ataque procedural. kind: slash, slash_r, overhead, thrust, spin, slam, sweep
 ## Retorna o tempo até o golpe acertar (para sincronizar o dano).
 func attack_motion(kind: String, windup: float, strike: float, recover: float, power := 1.0) -> float:
+	if rigged and anim:
+		# golpe com esqueleto: o clipe é esticado/encolhido para durar o mesmo tempo do golpe
+		var total := windup + strike + recover
+		var heavy := power >= 1.3 or kind in ["overhead", "spin", "slam"]
+		var clip := "attack_heavy" if heavy else "attack_light"
+		var len := _clip_length(clip)
+		if len > 0.0 and total > 0.0:
+			_restart(clip, clampf(len / total, 0.4, 2.5))
+			_clip_busy = total
 	var t := new_tween().set_trans(Tween.TRANS_SINE)
 	var h := height
 	match kind:

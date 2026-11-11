@@ -199,8 +199,8 @@ func update(focus: Vector3, force := false) -> void:
 			var c := fc + Vector2i(dx, dz)
 			if c.x < 0 or c.y < 0 or c.x >= per_side or c.y >= per_side:
 				continue
-			var cx := c.x * chunk_m - half + chunk_m * 0.5
-			var cz := c.y * chunk_m - half + chunk_m * 0.5
+			var cx: float = c.x * chunk_m - half + chunk_m * 0.5
+			var cz: float = c.y * chunk_m - half + chunk_m * 0.5
 			var d := Vector2(focus.x - cx, focus.z - cz).length() - chunk_m * 0.5
 			if d > view_dist:
 				continue
@@ -234,8 +234,8 @@ func update(focus: Vector3, force := false) -> void:
 			_chunks[c].cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if lod == 0 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_chunk_lod[c] = lod
 	for c in _colliders.keys():
-		var cx := c.x * chunk_m - half + chunk_m * 0.5
-		var cz := c.y * chunk_m - half + chunk_m * 0.5
+		var cx: float = c.x * chunk_m - half + chunk_m * 0.5
+		var cz: float = c.y * chunk_m - half + chunk_m * 0.5
 		if Vector2(focus.x - cx, focus.z - cz).length() - chunk_m * 0.7 > collider_dist * 1.6:
 			_colliders[c].queue_free()
 			_colliders.erase(c)

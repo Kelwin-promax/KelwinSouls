@@ -164,8 +164,8 @@ func _process(delta: float) -> void:
 			camera.h_offset = 0.0
 			camera.v_offset = 0.0
 	# câmera nunca abaixo do terreno/água
-	if Game.terrain:
+	if Game.terrain or Game.dungeon_active:
 		var cp := camera.global_position
-		var gy: float = Game.terrain.ground_y(cp.x, cp.z) + 0.35
+		var gy: float = Game.ground_y(cp.x, cp.z) + 0.35
 		if cp.y < gy:
 			camera.global_position.y = gy

@@ -273,7 +273,7 @@ func _physics_process(delta: float) -> void:
 				state = S.CHASE
 				_t = 0.0
 	_apply_move(move, delta)
-	var turn := wrapf(_yaw - _prev_yaw, -PI, PI) / max(delta, 0.0001)
+	var turn: float = wrapf(_yaw - _prev_yaw, -PI, PI) / max(delta, 0.0001)
 	_prev_yaw = _yaw
 	if state != S.ATTACK:
 		rig.tick(delta, clampf(_speed_now / run_speed, 0.0, 1.0), turn)
@@ -282,6 +282,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _drive_anim() -> void:
+	# modelos com esqueleto (rigged) têm a locomoção dirigida pelo ModelRig
+	if rig.rigged:
+		return
 	rig.play_anim(["take", "idle", "stand"], 1.0 + clampf(_speed_now / run_speed, 0.0, 1.0))
 
 
@@ -398,7 +401,10 @@ func _apply_move(move: Vector3, delta: float) -> void:
 		if d.length() < min_d and d.length() > 0.01:
 			move += d.normalized() * (min_d - d.length()) * 6.0
 	var np := global_position + move * delta
-	var gy: float = Game.terrain.ground_y(np.x, np.z)
+	# dentro de masmorra, o inimigo não atravessa as paredes
+	if Game.dungeon_active and Game.dungeon and not Game.dungeon.is_walkable(np):
+		np = global_position
+	var gy: float = Game.ground_y(np.x, np.z)
 	# evita subir paredões
 	if gy - global_position.y > 2.0 * delta * max(move.length(), 1.0) + 0.6 and state != S.ATTACK:
 		np = global_position

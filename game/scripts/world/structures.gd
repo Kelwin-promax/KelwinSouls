@@ -52,6 +52,7 @@ func setup(p_terrain: Terrain, world: Dictionary) -> void:
 	_chapel(Vector3(350, 0, 2470))
 	_ember_tree(Vector3(world.ember_tree[0], world.ember_tree[1], world.ember_tree[2]))
 	_forge(Vector3(2100, 0, 650))
+	_bridges(world)
 
 
 # ------------------------------------------------------------ peças básicas
@@ -189,7 +190,6 @@ func _obelisks(n: Node3D) -> void:
 		l.light_energy = 2.0
 		l.omni_range = 18.0
 		l.position = Vector3(0, _ground(n, Vector3.ZERO) + 2.0, 0)
-		l.visibility_range_end = 250.0
 		n.add_child(l)
 
 
@@ -224,13 +224,19 @@ func _citadel() -> void:
 			t.visibility_range_end = 5000.0
 			var cone := cyl(root, p + Vector3(0, g + 34.0, 0), 7.5, 0.3, 14.0, roof, 16, false)
 			cone.visibility_range_end = 5000.0
+	# ameias no topo da muralha (um MultiMesh de ~1000 blocos), com vão no portão
+	Arch.merlons_ring(root, Vector3.ZERO, R, 1000,
+		func(x: float, z: float) -> float: return terrain.height_at(c.x + x, c.z + z) + 20.6,
+		Vector3(2.4, 3.2, 6.0), ivory, 0.0, 0.075)
 	# portão
 	var gp := Vector3(0, 0, R)
 	var gg := terrain.height_at(c.x, c.z + R)
 	for s in [-1, 1]:
 		var tw := cyl(root, gp + Vector3(s * 14, gg - 2, 0), 8, 7, 44, ivory, 16)
 		tw.visibility_range_end = 5000.0
-	box(root, gp + Vector3(0, gg + 30, 0), Vector3(30, 8, 8), ivory)
+	# arco de aduelas sobre a passagem, com o rasgo escuro do vão
+	Arch.arch(root, Vector3(0, gg, R), 14.0, 3.2, 8.0, 13, ivory)
+	box(root, gp + Vector3(0, gg + 6.0, -0.5), Vector3(26, 12, 0.6), obsidian, Vector3.ZERO, false)
 	# torre de menagem perto da Árvore
 	var kp := Vector3(0, 0, -150)
 	var kg := terrain.height_at(c.x + kp.x, c.z + kp.z)
@@ -263,10 +269,13 @@ func _pagoda(p: Vector3) -> void:
 		for cx in [-1, 1]:
 			for cz in [-1, 1]:
 				cyl(root, Vector3(cx * w * 0.5, y + 1, cz * w * 0.5), 0.6, 0.6, h, red_lacquer, 8, false)
-		var r := box(root, Vector3(0, y + 1 + h + 0.6, 0), Vector3(w + 8, 1.2, w + 8), roof, Vector3.ZERO, false)
-		r.visibility_range_end = 4000.0
+		# telhado de quatro águas com beirais que sobem nos cantos
+		Arch.hip_roof(root, Vector3(0, y + 1 + h, 0), w + 8, w + 8, 3.2, 1.6, roof)
 		y += h + 1.2
 		w *= 0.8
+	# escadaria de pedra na frente (do chão até o topo da base, em y = 1)
+	for k in 3:
+		box(root, Vector3(0, 0.25 + k * 0.35, 20.5 - k * 0.9), Vector3(8.0, 0.5, 1.0), stone)
 	cyl(root, Vector3(0, y + 1, 0), 0.5, 0.05, 14, red_lacquer, 8, false)
 	var lamp := OmniLight3D.new()
 	lamp.light_color = Color(1.0, 0.5, 0.3)
@@ -294,17 +303,121 @@ func _forge(p: Vector3) -> void:
 	add_child(root)
 	p.y = terrain.height_at(p.x, p.z)
 	root.position = p + Vector3(30, 0, 30)
-	box(root, Vector3(0, 1.5, 0), Vector3(5, 3, 2.5), obsidian)
-	box(root, Vector3(0, 3.4, 0), Vector3(7, 0.8, 3), obsidian)
+	# oficina: três paredes de pedra (a frente fica aberta), telhado de quatro águas e chaminé
+	box(root, Vector3(0, 2.2, -3.6), Vector3(9.0, 4.4, 0.8), stone)           # fundo
+	box(root, Vector3(-4.4, 2.2, 0), Vector3(0.8, 4.4, 7.2), stone)           # lateral esquerda
+	box(root, Vector3(4.4, 2.2, 0), Vector3(0.8, 4.4, 7.2), stone)            # lateral direita
+	Arch.hip_roof(root, Vector3(0, 4.3, 0), 10.0, 8.6, 3.2, 0.8, roof)
+	cyl(root, Vector3(3.0, 0, -2.6), 0.9, 0.6, 10.0, stone, 10)
+	# fornalha de obsidiana com brasa, bigorna, tanque de têmpera e fole
+	box(root, Vector3(-2.0, 0.8, -2.5), Vector3(2.4, 1.6, 1.6), obsidian)
 	var f := FX.flame(Color(1.0, 0.5, 0.15), 50, 0.8, 3.0)
-	f.position = Vector3(0, 4, 0)
+	f.position = Vector3(-2.0, 1.9, -2.5)
 	root.add_child(f)
+	box(root, Vector3(1.2, 0.5, 0.8), Vector3(1.0, 1.0, 0.6), obsidian)       # base da bigorna
+	box(root, Vector3(1.2, 1.15, 0.8), Vector3(1.9, 0.35, 0.8), obsidian)     # face da bigorna
+	box(root, Vector3(-2.2, 0.35, 2.4), Vector3(2.0, 0.7, 1.3), stone)        # tanque
+	box(root, Vector3(-2.2, 0.72, 2.4), Vector3(1.7, 0.03, 1.0), ice, Vector3.ZERO, false)  # água no tanque
+	box(root, Vector3(2.9, 0.8, 2.5), Vector3(1.0, 1.6, 0.6), wood)           # fole
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.45, 0.15)
 	l.light_energy = 4.0
 	l.omni_range = 30.0
-	l.position = Vector3(0, 6, 0)
+	l.position = Vector3(-2.0, 3.6, -2.5)
 	root.add_child(l)
+
+
+# ------------------------------------------------------------ pontes
+## Estradas (mesma regra do gen_world.py): reproduzidas aqui para achar onde elas cruzam a água.
+const ROADS := [
+	["graca_despertar", "graca_vale"], ["graca_vale", "graca_cemiterio"], ["graca_vale", "graca_portao"],
+	["graca_portao", "graca_cidadela"], ["graca_vale", "graca_pagode"], ["graca_portao", "graca_fornalha"],
+	["graca_portao", "graca_pantano"], ["graca_pantano", "graca_picos"], ["graca_fornalha", "graca_abismo"],
+	["graca_cemiterio", "graca_pantano"],
+]
+const ROAD_STEP := 8.0
+
+
+func _road_points(a: Vector2, b: Vector2, bend_key: int) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var L := a.distance_to(b)
+	var steps := int(L / ROAD_STEP)
+	var d := b - a
+	var nrm := Vector2(-d.y, d.x) / L
+	for s in steps + 1:
+		var t := float(s) / steps
+		var bend := sin(t * PI) * 180.0 * sin(float(bend_key))
+		out.append(a + d * t + nrm * bend)
+	return out
+
+
+## Pontes: onde uma estrada atravessa um trecho de água, um tabuleiro de pedra e madeira liga as margens.
+func _bridges(world: Dictionary) -> void:
+	var gp := {}
+	for g in world.graces:
+		gp[g.id] = Vector2(g.pos[0], g.pos[2])
+	var water: float = float(world.water)
+	var count := 0
+	for pair in ROADS:
+		if not gp.has(pair[0]) or not gp.has(pair[1]):
+			continue
+		var key: int = String(pair[0]).length() + String(pair[1]).length()
+		var pts := _road_points(gp[pair[0]], gp[pair[1]], key)
+		var wet: Array[bool] = []
+		for p in pts:
+			wet.append(terrain.height_at(p.x, p.y) < water + 0.3)
+		var i := 0
+		while i < pts.size():
+			if not wet[i]:
+				i += 1
+				continue
+			var j := i
+			while j < pts.size() and wet[j]:
+				j += 1
+			var run := j - i
+			# trechos de 2 a 40 amostras (16 a 320 m) com margem seca dos dois lados
+			if run >= 2 and run <= 40 and i > 0 and j < pts.size():
+				_bridge(pts[i - 1], pts[j], water)
+				count += 1
+			i = j
+	print("pontes construídas: %d" % count)
+
+
+func _bridge(a2: Vector2, b2: Vector2, water: float) -> void:
+	var a := Vector3(a2.x, 0, a2.y)
+	var b := Vector3(b2.x, 0, b2.y)
+	var deck := water + 1.8
+	var mid := (a + b) * 0.5
+	mid.y = deck
+	var root := Node3D.new()
+	add_child(root)
+	root.position = mid
+	var dir := b - a
+	dir.y = 0.0
+	root.look_at(mid + dir.normalized(), Vector3.UP)
+	var L := dir.length() + 3.0
+	var deck_mat := wood
+	box(root, Vector3(0, -0.3, 0), Vector3(5.2, 0.6, L), deck_mat)
+	box(root, Vector3(0, -0.5, 0), Vector3(6.0, 0.3, L), stone, Vector3.ZERO, false)   # viga de apoio
+	for s in [-2.5, 2.5]:
+		box(root, Vector3(s, 0.7, 0), Vector3(0.3, 1.0, L), wood, Vector3.ZERO, false)  # guarda-corpos
+	# pilares de pedra até o leito do rio (pulados onde o terreno já está acima do tabuleiro)
+	var n := maxi(2, int(L / 9.0))
+	for k in n + 1:
+		var z := -L * 0.5 + L * k / n
+		var g := root.to_global(Vector3(0, 0, z))
+		var bed := terrain.height_at(g.x, g.z)
+		if deck - bed < 0.8:
+			continue
+		cyl(root, Vector3(0, bed - deck - 0.3, z), 0.8, 0.8, deck - bed - 0.3, stone, 8, false)
+	# lanternas nas pontas
+	for end in [-L * 0.5, L * 0.5]:
+		var lamp := OmniLight3D.new()
+		lamp.light_color = Color(1.0, 0.7, 0.4)
+		lamp.light_energy = 1.2
+		lamp.omni_range = 10.0
+		lamp.position = Vector3(2.6, 1.8, end)
+		root.add_child(lamp)
 
 
 func _ember_tree(p: Vector3) -> void:

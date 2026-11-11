@@ -121,6 +121,8 @@ func _aggro() -> void:
 	if _player and _player.cam:
 		_player.cam.shake(0.25, 1.2)
 		_player.cam.set_extra_distance(clampf(rig.height * 0.5, 0.0, 5.0))
+	if Game.main and Game.main.has_method("play_boss_intro"):
+		Game.main.play_boss_intro(self)
 
 
 func _physics_process(delta: float) -> void:

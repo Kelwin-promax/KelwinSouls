@@ -25,6 +25,12 @@ var toast_label: Label
 var banner: Control
 var banner_label: Label
 var region_label: Label
+var clock_label: Label
+var cine: Control
+var bars_top: ColorRect
+var bars_bottom: ColorRect
+var cine_label: Label
+var _cine_tween: Tween
 var menu_layer: Control
 var _boss: Node
 var _toast_t := 0.0
@@ -47,6 +53,7 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	_build_hud()
+	_build_extras()
 	menu_layer = Control.new()
 	menu_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -219,6 +226,62 @@ func _build_hud() -> void:
 	banner.modulate.a = 0.0
 	root.add_child(banner)
 	_update_embers()
+
+
+func _build_extras() -> void:
+	clock_label = label("", 20, DIM)
+	clock_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	clock_label.position = Vector2(-340, 26)
+	clock_label.custom_minimum_size = Vector2(300, 0)
+	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	root.add_child(clock_label)
+	# faixas de cinema (cutscenes): ficam fora de root para não sumirem com o HUD
+	cine = Control.new()
+	cine.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cine.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(cine)
+	bars_top = ColorRect.new()
+	bars_top.color = Color(0, 0, 0)
+	bars_top.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	bars_top.offset_bottom = 0
+	bars_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cine.add_child(bars_top)
+	bars_bottom = ColorRect.new()
+	bars_bottom.color = Color(0, 0, 0)
+	bars_bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	bars_bottom.offset_top = 0
+	bars_bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cine.add_child(bars_bottom)
+	cine_label = label("", 30, Color(0.95, 0.9, 0.8), true)
+	cine_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cine_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cine_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	cine_label.modulate.a = 0.0
+	cine.add_child(cine_label)
+
+
+func set_clock(text: String) -> void:
+	clock_label.text = text
+
+
+## Faixas de cinema. on=true abre (120 px em cima e embaixo), on=false fecha.
+func set_letterbox(on: bool, duration := 0.8) -> void:
+	if _cine_tween:
+		_cine_tween.kill()
+	_cine_tween = create_tween().set_parallel(true)
+	_cine_tween.tween_property(bars_top, "offset_bottom", 120.0 if on else 0.0, duration)
+	_cine_tween.tween_property(bars_bottom, "offset_top", -120.0 if on else 0.0, duration)
+	if not on:
+		_cine_tween.tween_property(cine_label, "modulate:a", 0.0, duration * 0.5)
+
+
+## Mostra uma legenda no meio da tela durante cutscenes.
+func cine_caption(text: String, hold := 2.5) -> void:
+	cine_label.text = text
+	var tw := create_tween()
+	tw.tween_property(cine_label, "modulate:a", 1.0, 0.6)
+	tw.tween_interval(hold)
+	tw.tween_property(cine_label, "modulate:a", 0.0, 0.8)
 
 
 func set_hud_visible(v: bool) -> void:
@@ -452,6 +515,58 @@ func grace_menu(grace_name: String, on_leave: Callable) -> void:
 	v.add_child(button("Partir", func():
 		close_menu()
 		on_leave.call()))
+	_focus_first(v)
+
+
+## Inventário e estado: lágrimas, brasas, Grandes Brasas, chefes, graças, atributos e clima.
+func inventory_menu(weather_text: String, clock: String) -> void:
+	var c := _open("inventory")
+	c.add_child(panel_bg(0.86))
+	var v := _vbox(c)
+	v.add_child(label("Inventário", 44, GOLD, true))
+	v.add_child(label(clock + "   •   " + weather_text, 20, DIM))
+	var sp := Control.new(); sp.custom_minimum_size = Vector2(0, 14); v.add_child(sp)
+	v.add_child(label("Lágrimas Ígnea   %d / %d" % [Game.flasks, Game.flasks_max], 24))
+	v.add_child(label("Brasas   %d%s" % [Game.brasas, ("   (perdidas: %d)" % Game.lost_brasas) if Game.lost_brasas > 0 else ""], 24))
+	var names: Array = []
+	for id in Game.great_embers:
+		var b: Dictionary = Game.boss_by_id(id)
+		names.append(b.get("title", id))
+	var ge_txt := "nenhuma ainda" if names.is_empty() else ", ".join(names)
+	v.add_child(label("Grandes Brasas   %d / 5   —   %s" % [Game.great_embers.size(), ge_txt], 20, DIM))
+	v.add_child(label("Chefes derrotados   %d" % Game.defeated_bosses.size(), 22))
+	v.add_child(label("Graças descobertas   %d / %d" % [Game.discovered_graces.size(), Game.world.graces.size()], 22))
+	v.add_child(label("Masmorras concluídas   %d / %d" % [Game.dungeons_cleared.size(), Dungeon.DEFS.size()], 22))
+	var sp2 := Control.new(); sp2.custom_minimum_size = Vector2(0, 14); v.add_child(sp2)
+	v.add_child(label("Nível %d   •   Vigor %d   Fôlego %d   Força %d" % [Game.level, Game.vigor, Game.endurance, Game.strength], 22, DIM))
+	var secs := int(Game.play_time)
+	v.add_child(label("Tempo de jogo   %02d:%02d:%02d" % [secs / 3600, (secs / 60) % 60, secs % 60], 20, DIM))
+	var sp3 := Control.new(); sp3.custom_minimum_size = Vector2(0, 18); v.add_child(sp3)
+	v.add_child(button("Voltar", func(): close_menu()))
+	_focus_first(v)
+
+
+## Caixa de diálogo com um NPC. options = [{"label": "...", "id": "..."}]; on_pick recebe o id.
+func dialogue_menu(speaker: String, text: String, options: Array, on_pick: Callable) -> void:
+	var c := _open("dialogue")
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.5)
+	shade.anchor_top = 0.55
+	shade.anchor_right = 1.0
+	shade.anchor_bottom = 1.0
+	c.add_child(shade)
+	var v := _vbox(c, 0.5, 0.78)
+	v.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	v.custom_minimum_size = Vector2(900, 0)
+	v.add_child(label(speaker, 30, GOLD, true))
+	var body := label(text, 22, Color(0.92, 0.9, 0.84))
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(880, 0)
+	v.add_child(body)
+	var sp := Control.new(); sp.custom_minimum_size = Vector2(0, 10); v.add_child(sp)
+	for o in options:
+		var id: String = o.id
+		v.add_child(button(o.label, func(): on_pick.call(id)))
 	_focus_first(v)
 
 

@@ -86,6 +86,11 @@ func is_busy() -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if state == State.DEAD or state == State.REST:
 		return
+	if event.is_action_pressed("mount"):
+		_toggle_mount()
+		return
+	if Game.mounted:
+		return   # montado: só o cavalo se move, sem golpes, rolamentos ou pulos
 	if event.is_action_pressed("attack"):
 		_request_attack("heavy" if Input.is_action_pressed("heavy_attack") else "light")
 	elif event.is_action_pressed("heavy_attack") and event is InputEventJoypadMotion:
@@ -100,6 +105,50 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _dodge_held < 0.28:
 			_try_roll()
 		_dodge_held = 0.0
+
+
+func _toggle_mount() -> void:
+	if Game.mounted:
+		_dismount()
+		return
+	var h = Game.horse
+	if h == null or not is_instance_valid(h) or state != State.FREE or not is_on_floor():
+		return
+	if global_position.distance_to(h.global_position) > 3.5:
+		Game.message("Aproxime-se do cavalo para montar", "small")
+		return
+	Game.mounted = true
+	velocity = Vector3.ZERO
+	h.mount_by(self)
+	Sfx.play_at("roll", global_position, -8)
+
+
+func _dismount() -> void:
+	Game.mounted = false
+	var h = Game.horse
+	var side := Vector3.RIGHT
+	if h and is_instance_valid(h):
+		side = h.global_transform.basis.x
+		h.dismount()
+	global_position += side * 1.6
+	global_position.y = Game.ground_height(global_position.x, global_position.z) + 0.3
+	rig.position.y = 0.0
+	velocity = Vector3.ZERO
+
+
+func _mounted_tick(delta: float, input: Vector2, cam_basis: Basis) -> void:
+	var h = Game.horse
+	if h == null or not is_instance_valid(h):
+		Game.mounted = false
+		rig.position.y = 0.0
+		return
+	h.drive(delta, input, cam_basis)
+	global_position = h.global_position
+	velocity = Vector3.ZERO
+	_yaw = h.rotation.y
+	rig.rotation.y = _yaw
+	rig.position.y = lerpf(rig.position.y, h.saddle_height(), 1.0 - exp(-delta * 8.0))
+	rig.tick(delta, h.speed01(), 0.0, true)
 
 
 func _request_attack(kind: String) -> void:
@@ -187,7 +236,10 @@ func _physics_process(delta: float) -> void:
 	_move_dir.y = 0
 	if state in [State.DEAD, State.REST]:
 		_move_dir = Vector3.ZERO
-	_in_water = global_position.y < Game.world.water - 0.3
+	if Game.mounted and state != State.DEAD:
+		_mounted_tick(delta, input, cam_basis)
+		return
+	_in_water = not Game.dungeon_active and global_position.y < Game.world.water - 0.3
 
 	var hvel := Vector3(velocity.x, 0, velocity.z)
 	var target_vel := Vector3.ZERO
@@ -265,15 +317,15 @@ func _physics_process(delta: float) -> void:
 	velocity.x = hvel.x
 	velocity.z = hvel.z
 	# gravidade só quando há colisão de terreno carregada (evita cair no vazio no primeiro frame)
-	var has_ground: bool = Game.terrain == null or Game.terrain.has_collision_at(global_position)
+	var has_ground: bool = Game.dungeon_active or Game.terrain == null or Game.terrain.has_collision_at(global_position)
 	if not is_on_floor() and has_ground:
 		velocity.y -= GRAVITY * delta
 	elif not has_ground:
 		velocity.y = 0.0
-		global_position.y = max(global_position.y, Game.terrain.height_at(global_position.x, global_position.z))
+		global_position.y = max(global_position.y, Game.ground_height(global_position.x, global_position.z))
 	move_and_slide()
-	# rede de segurança: nunca abaixo do terreno
-	if Game.terrain:
+	# rede de segurança: nunca abaixo do terreno (ou do piso da masmorra)
+	if not Game.dungeon_active and Game.terrain:
 		var gy: float = Game.terrain.height_at(global_position.x, global_position.z)
 		if global_position.y < gy - 1.5:
 			global_position.y = gy + 0.2
@@ -301,7 +353,7 @@ func _physics_process(delta: float) -> void:
 			var kind := "stone" if reg in ["cidadela_marfim", "fornalha", "abismo_obsidiana"] else "grass"
 			Sfx.play_at("step_%s_%d" % [kind, randi() % 3], global_position, -14, 0.12, 25.0)
 
-	var turn := wrapf(_yaw - _prev_yaw, -PI, PI) / max(delta, 0.0001)
+	var turn: float = wrapf(_yaw - _prev_yaw, -PI, PI) / max(delta, 0.0001)
 	_prev_yaw = _yaw
 	rig.tick(delta, clampf(spd_now / SPRINT, 0.0, 1.0) if state == State.FREE else 0.0, turn, is_on_floor())
 	if state == State.FREE:
@@ -412,6 +464,19 @@ func respawn_at(pos: Vector3) -> void:
 	rig.pose.position = Vector3.ZERO
 	hp_changed.emit(hp, Game.max_hp())
 	stamina_changed.emit(stamina, Game.max_stamina())
+
+
+## Trava os controles durante cutscenes (sem curar, ao contrário de set_resting).
+func set_cutscene(on: bool) -> void:
+	if on and state == State.FREE:
+		state = State.REST
+	elif not on and state == State.REST:
+		state = State.FREE
+
+
+func dismount_now() -> void:
+	if Game.mounted:
+		_dismount()
 
 
 func set_resting(on: bool) -> void:

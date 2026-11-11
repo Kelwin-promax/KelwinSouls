@@ -14,6 +14,10 @@ var cam: CameraRig
 var sun: DirectionalLight3D
 var env: Environment
 var title_cam: Camera3D
+var day_night: SkyCycle
+var _dungeons: Array = []           # Dungeon (portais no mundo aberto)
+var _npcs: Array = []               # Npc
+var _cutscene := false
 
 var _enemy_nodes: Dictionary = {}   # índice -> Enemy
 var _enemy_dead: Dictionary = {}    # índice -> true (até descansar)
@@ -85,6 +89,10 @@ func _setup_environment() -> void:
 	sun.directional_shadow_max_distance = 90.0 if Game.quality == 0 else 160.0
 	sun.shadow_blur = 1.5
 	add_child(sun)
+	day_night = SkyCycle.new()
+	add_child(day_night)
+	day_night.setup(env, sun)
+	day_night.weather_changed.connect(func(w): Game.message("Clima: %s" % SkyCycle.WEATHER_NAMES[w], "small"))
 
 
 # ------------------------------------------------------------ construção do mundo
@@ -113,6 +121,7 @@ func _build_world() -> void:
 		gr.setup(g, terrain)
 		add_child(gr)
 		_graces[g.id] = gr
+	_build_dungeons_and_npcs(world)
 	_make_water(world)
 	# câmera do título orbitando a Árvore de Brasa
 	title_cam = Camera3D.new()
@@ -186,6 +195,7 @@ func _start_play() -> void:
 	player.respawn_at(player.global_position)
 	cam.yaw = PI  # olhando para o norte (Cidadela/Árvore)
 	cam.camera.current = true
+	_place_horse(Game.grace_by_id(Game.last_grace))
 	_reset_enemies()
 	_refresh_lost_marker()
 	Game.refill_flasks()
@@ -227,15 +237,20 @@ func _process(delta: float) -> void:
 		return
 	if player == null:
 		return
-	terrain.update(player.global_position)
-	props.update(player.global_position)
+	day_night.follow_target = player
+	day_night.update(delta)
+	if not Game.dungeon_active:
+		terrain.update(player.global_position)
+		props.update(player.global_position)
 	_tick -= delta
 	if _tick <= 0.0:
 		_tick = 0.5
-		_stream_enemies()
-		_stream_bosses()
-		_check_region()
+		if not Game.dungeon_active:
+			_stream_enemies()
+			_stream_bosses()
+			_check_region()
 		_check_lost_brasas()
+		hud.set_clock(day_night.clock_text() + "   •   " + day_night.weather_name())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -253,6 +268,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		hud.map_menu()
 		hud.menu_closed.connect(_resume, CONNECT_ONE_SHOT)
+	elif event.is_action_pressed("inventory") and not hud.is_menu_open() and not player.is_dead():
+		get_tree().paused = true
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		hud.inventory_menu(day_night.weather_name(), day_night.clock_text())
+		hud.menu_closed.connect(_resume, CONNECT_ONE_SHOT)
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not hud.is_menu_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -266,6 +286,8 @@ func _pause() -> void:
 		_playing = false
 		hud.close_menu()
 		_despawn_all()
+		_drop_dungeon_state()
+		_free_horse()
 		player.queue_free()
 		cam.queue_free()
 		player = null
@@ -386,6 +408,10 @@ func _on_player_died() -> void:
 	Sfx.play_music("", 1.0)
 	Game.lost_brasas = Game.brasas
 	Game.lost_pos = player.global_position
+	# morreu dentro de uma masmorra: as brasas ficam na entrada, do lado de fora
+	if Game.dungeon_active and Game.dungeon:
+		Game.lost_pos = (Game.dungeon as Dungeon).exit_world()
+	_drop_dungeon_state()
 	Game.add_brasas(-Game.brasas)
 	cam.release_lock()
 	cam.set_extra_distance(0.0)
@@ -465,7 +491,10 @@ func fast_travel(gid: String) -> void:
 	hud.loading_screen("Viajando...")
 	Game.last_grace = gid
 	await get_tree().process_frame
+	_drop_dungeon_state()
+	player.dismount_now()
 	await _teleport(_grace_spawn_pos(Game.grace_by_id(gid)))
+	_place_horse(Game.grace_by_id(gid))
 	player.set_resting(false)
 	_reset_enemies()
 	_despawn_all()
@@ -485,3 +514,126 @@ func _start_ending() -> void:
 			player.set_resting(false)
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			Game.message("O mundo continua... explore e enfrente os chefes restantes.", "small")))
+
+
+# ------------------------------------------------------------ montaria, NPCs e masmorras
+func _grace_xz(gid: String) -> Vector3:
+	var g := Game.grace_by_id(gid)
+	return Vector3(g.pos[0], 0, g.pos[2])
+
+
+func _npc_pos(base: Vector3, dx: float, dz: float) -> Vector3:
+	var x := base.x + dx
+	var z := base.z + dz
+	return Vector3(x, terrain.height_at(x, z), z)
+
+
+func _build_dungeons_and_npcs(_world: Dictionary) -> void:
+	for i in Dungeon.DEFS.size():
+		var d := Dungeon.new()
+		d.setup(Dungeon.DEFS[i], i, _grace_xz(Dungeon.DEFS[i].grace), terrain)
+		add_child(d)
+		_dungeons.append(d)
+	var vesper := Npc.new()
+	vesper.setup("vesper", _npc_pos(_grace_xz("graca_vale"), 5.0, 4.0), "sister_vesper__the_veiled_oath")
+	add_child(vesper)
+	_npcs.append(vesper)
+	var smith := Npc.new()
+	smith.setup("ferreiro", _npc_pos(_grace_xz("graca_fornalha"), -4.0, 3.0))
+	add_child(smith)
+	_npcs.append(smith)
+
+
+func _place_horse(g: Dictionary) -> void:
+	Game.mounted = false
+	var p := Vector3(g.pos[0] - 4.5, 0, g.pos[2] + 3.0)
+	if Game.horse == null or not is_instance_valid(Game.horse):
+		var h := Horse.new()
+		add_child(h)
+		Game.horse = h
+	Game.horse.setup(p, 0.0)
+
+
+func _free_horse() -> void:
+	if Game.horse and is_instance_valid(Game.horse):
+		Game.horse.queue_free()
+	Game.horse = null
+	Game.mounted = false
+
+
+## Sai de uma masmorra sem teleportar (usado ao morrer e ao viajar). Idempotente.
+func _drop_dungeon_state() -> void:
+	if not Game.dungeon_active:
+		return
+	var d = Game.dungeon
+	Game.dungeon_active = false
+	Game.dungeon = null
+	if d and is_instance_valid(d):
+		d.clear_interior()
+	if day_night:
+		day_night.set_outdoor(true)
+
+
+func enter_dungeon(d: Dungeon) -> void:
+	if Game.dungeon_active:
+		return
+	player.dismount_now()
+	_despawn_all()
+	Game.dungeon_floor_y = Dungeon.DEPTH_Y
+	Game.dungeon = d
+	Game.dungeon_active = true
+	d.build_interior()
+	day_night.set_outdoor(false)
+	var sp := d.start_world()
+	player.velocity = Vector3.ZERO
+	player.global_position = sp
+	cam.global_position = sp + Vector3(0, 1.6, 0)
+	hud.region_banner(d.title())
+	Sfx.play_music("music_boss", 2.0)
+
+
+func leave_dungeon(d: Dungeon) -> void:
+	_drop_dungeon_state()
+	Sfx.play_music("music_explore", 3.0)
+	await _teleport(d.exit_world())
+	Game.save_game()
+
+
+## Cena de entrada do chefe: câmera desliza até ele, faixas de cinema e legenda com o nome.
+func play_boss_intro(b: Node3D) -> void:
+	if _cutscene or player == null or cam == null or player.is_dead() or Game.dungeon_active:
+		return
+	_cutscene = true
+	player.set_cutscene(true)
+	hud.set_letterbox(true)
+	var shot := Camera3D.new()
+	shot.fov = 46.0
+	shot.far = 3000.0
+	add_child(shot)
+	var focus: Vector3 = b.global_position + Vector3(0, 1.8, 0)
+	var flat := player.global_position - b.global_position
+	flat.y = 0.0
+	var dir := flat.normalized() if flat.length() > 0.1 else Vector3.BACK
+	var to := focus + dir * 9.0 + Vector3(0, 2.4, 0)
+	var from: Vector3 = cam.camera.global_position
+	shot.global_position = from
+	shot.current = true
+	shot.look_at(focus, Vector3.UP)
+	hud.cine_caption(b.display_name, 2.4)
+	var tw := create_tween()
+	tw.tween_method(func(t: float):
+		shot.global_position = from.lerp(to, t)
+		shot.look_at(focus, Vector3.UP), 0.0, 1.0, 3.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_interval(1.0)
+	tw.tween_callback(func(): _end_intro(shot))
+
+
+func _end_intro(shot: Camera3D) -> void:
+	hud.set_letterbox(false)
+	if is_instance_valid(cam):
+		cam.camera.current = true
+	if is_instance_valid(shot):
+		shot.queue_free()
+	if player and is_instance_valid(player):
+		player.set_cutscene(false)
+	_cutscene = false

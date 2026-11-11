@@ -28,6 +28,14 @@ var lost_brasas := 0
 var lost_pos := Vector3.ZERO
 var play_time := 0.0
 var ending_seen := ""
+var world_time := 9.0                 # horas desde o início do mundo (dia = floor(t/24)+1)
+var mounted := false                  # montado no cavalo?
+var dungeon_active := false           # dentro de uma masmorra (chão plano em outra altura)
+var dungeon_floor_y := 0.0
+var dungeon: Node = null              # masmorra atual (tem is_walkable)
+var horse: Node = null                # cavalo da montaria (Horse)
+var dungeons_cleared: Array = []      # ids de masmorras concluídas
+var npc_flags: Dictionary = {}        # progresso de diálogos (ex.: "vesper_ajudou": true)
 
 # ---- configurações
 var mouse_sens := 0.22
@@ -61,9 +69,45 @@ func _load_data() -> void:
 	manifest = JSON.parse_string(FileAccess.get_file_as_string("res://assets/models/manifest.json"))
 
 
+## Altura do chão no ponto (x, z): o terreno lá fora, o piso da masmorra lá dentro.
+func ground_height(x: float, z: float) -> float:
+	if dungeon_active:
+		return dungeon_floor_y
+	if terrain == null:
+		return 0.0
+	return terrain.height_at(x, z)
+
+
+func ground_y(x: float, z: float) -> float:
+	if dungeon_active:
+		return dungeon_floor_y
+	if terrain == null:
+		return 0.0
+	return terrain.ground_y(x, z)
+
+
+## Modelos licenciados que não vão para a build distribuída: se o arquivo não existir,
+## usa o substituto. O .exe exportado não contém o asset de Game of Thrones (ver export_presets.cfg).
+const MODEL_FALLBACK := {"drogon_-_dragon_game_of_thrones": "red_dragon"}
+
+
+## Versão com esqueleto e animações (gerada por tools/rig/rig_humanoid.py), se existir.
+func rig_path(model_name: String) -> String:
+	return "res://assets/models/%s__rig.glb" % model_name
+
+
+func has_rig(model_name: String) -> bool:
+	return ResourceLoader.exists(rig_path(model_name))
+
+
 func model_scene(model_name: String) -> PackedScene:
 	if not _scene_cache.has(model_name):
-		_scene_cache[model_name] = load("res://assets/models/%s.glb" % model_name)
+		var path := "res://assets/models/%s.glb" % model_name
+		if has_rig(model_name):
+			path = rig_path(model_name)
+		elif not ResourceLoader.exists(path) and MODEL_FALLBACK.has(model_name):
+			path = "res://assets/models/%s.glb" % MODEL_FALLBACK[model_name]
+		_scene_cache[model_name] = load(path)
 	return _scene_cache[model_name]
 
 
@@ -142,6 +186,7 @@ func new_game() -> void:
 	great_embers = []; defeated_bosses = []
 	discovered_graces = ["graca_despertar"]; last_grace = "graca_despertar"
 	lost_brasas = 0; play_time = 0.0; ending_seen = ""
+	world_time = 9.0; dungeons_cleared = []; npc_flags = {}
 
 
 func save_game() -> void:
@@ -151,6 +196,7 @@ func save_game() -> void:
 		"discovered_graces": discovered_graces, "last_grace": last_grace,
 		"lost_brasas": lost_brasas, "lost_pos": [lost_pos.x, lost_pos.y, lost_pos.z],
 		"play_time": play_time, "ending_seen": ending_seen,
+		"world_time": world_time, "dungeons_cleared": dungeons_cleared, "npc_flags": npc_flags,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	f.store_string(JSON.stringify(d, "\t"))
@@ -171,6 +217,9 @@ func load_game() -> bool:
 	var lp: Array = d.get("lost_pos", [0, 0, 0])
 	lost_pos = Vector3(lp[0], lp[1], lp[2])
 	play_time = float(d.get("play_time", 0.0)); ending_seen = d.get("ending_seen", "")
+	world_time = float(d.get("world_time", 9.0))
+	dungeons_cleared = d.get("dungeons_cleared", [])
+	npc_flags = d.get("npc_flags", {})
 	return true
 
 
@@ -232,6 +281,8 @@ func _setup_input() -> void:
 	_add_key("use_flask", [KEY_R], [], [JOY_BUTTON_X])
 	_add_key("interact", [KEY_E], [], [JOY_BUTTON_A])
 	_add_key("map", [KEY_M, KEY_TAB], [], [JOY_BUTTON_BACK])
+	_add_key("inventory", [KEY_I], [], [JOY_BUTTON_DPAD_DOWN])
+	_add_key("mount", [KEY_G], [], [JOY_BUTTON_DPAD_LEFT])
 	_add_key("pause", [KEY_ESCAPE], [], [JOY_BUTTON_START])
 	_add_key("ui_up_alt", [KEY_W], [], [])
 	_add_key("ui_down_alt", [KEY_S], [], [])
